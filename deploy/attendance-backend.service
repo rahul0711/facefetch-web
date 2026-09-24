@@ -1,0 +1,18 @@
+[Unit]
+Description=CCTV Attendance backend (FastAPI/uvicorn, SCRFD+AdaFace+FAISS)
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=aiserver
+Group=aiserver
+WorkingDirectory=/home/aiserver/Desktop/Facenet/Face_Testing_Website_With_InsightFace
+Environment="LD_LIBRARY_PATH=/home/aiserver/Desktop/Facenet/Face_Testing_Website_With_InsightFace/.venv/lib/python3.14/site-packages/nvidia/cu13/lib:/home/aiserver/Desktop/Facenet/Face_Testing_Website_With_InsightFace/.venv/lib/python3.14/site-packages/nvidia/cudnn/lib"
+ExecStart="/home/aiserver/Desktop/Facenet/Face_Testing_Website_With_InsightFace/.venv/bin/python" -m uvicorn app.web.attendance_server:app --host 127.0.0.1 --port 8001
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
