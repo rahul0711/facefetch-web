@@ -1,4 +1,4 @@
-import { Camera, CameraOff, ImagePlus, Lock, ScanFace, ShieldCheck, Smartphone, TriangleAlert, Upload, X } from 'lucide-react'
+import { Camera, CameraOff, ImagePlus, Lock, Mail, ScanFace, ShieldCheck, Smartphone, TriangleAlert, Upload, UserRound, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
@@ -6,12 +6,12 @@ import { useAuth } from '../../auth/AuthContext'
 import { TextReveal } from '../../components/effects'
 import SelfieCamera from '../../components/SelfieCamera'
 import Button from '../../components/ui/Button'
-import { Checkbox } from '../../components/ui/primitives'
+import { Checkbox, Field, Input } from '../../components/ui/primitives'
 import { LogoMark } from '../../components/ui/Logo'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { cn, num } from '../../lib/utils'
 import { getGuestEvent } from '../../services/eventService'
-import { FaceError, giveConsent, hasConsent, search } from '../../services/searchService'
+import { FaceError, giveConsent, hasConsent, isEmail, savedVisitor, saveVisitor, search } from '../../services/searchService'
 import { EventUnavailable } from './EventDetail'
 
 const SEARCH_STEPS = (n) => [
@@ -82,13 +82,26 @@ function TopBar({ ev, onClose, dark = true }) {
   )
 }
 
-function Consent({ ev, onAccept, onClose }) {
-  const [agree, setAgree] = useState(false)
+// Name + email (so the organizer knows who searched) and consent, in one card.
+function Consent({ ev, initial, agreed, serverError, onAccept, onClose }) {
+  const [agree, setAgree] = useState(agreed)
+  const [name, setName] = useState(initial?.name || '')
+  const [email, setEmail] = useState(initial?.email || '')
+  const [touched, setTouched] = useState(false)
+  const nameError = name.trim().length < 2 ? 'Please enter your name.' : null
+  const emailError = !isEmail(email) ? 'Please enter a valid email address.' : null
+  const submit = (e) => {
+    e.preventDefault()
+    setTouched(true)
+    if (!nameError && !emailError && agree) onAccept({ name, email })
+  }
   return (
     <div className="grid min-h-dvh grid-rows-[auto_1fr]">
       <TopBar ev={ev} onClose={onClose} />
       <div className="flex items-end justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center">
-        <motion.div
+        <motion.form
+          onSubmit={submit}
+          noValidate
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 28 }}
@@ -98,12 +111,21 @@ function Consent({ ev, onAccept, onClose }) {
             <ShieldCheck className="size-6" />
           </span>
           <h1 className="mt-5 text-2xl font-semibold text-navy-950">Before we search</h1>
-          <p className="mt-2 text-navy-500">Your photo is used to find your moments in this event.</p>
-          <ul className="mt-5 grid gap-3 text-[15px] text-navy-700">
+          <p className="mt-2 text-navy-500">Tell us who you are, then take a selfie or upload a photo.</p>
+          <div className="mt-5 grid gap-4">
+            <Field label="Your name" htmlFor="visitor-name" error={touched && nameError}>
+              <Input id="visitor-name" icon={UserRound} value={name} onChange={(e) => setName(e.target.value)} placeholder="Priya Sharma" autoComplete="name" aria-invalid={touched && !!nameError} maxLength={150} />
+            </Field>
+            <Field label="Email" htmlFor="visitor-email" error={touched && emailError}>
+              <Input id="visitor-email" type="email" icon={Mail} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" inputMode="email" aria-invalid={touched && !!emailError} maxLength={255} />
+            </Field>
+            {serverError && <p className="text-sm text-bad">{serverError}</p>}
+          </div>
+          <ul className="mt-5 grid gap-2.5 text-sm text-navy-600">
             {[
               `We only search ${ev.name}.`,
-              'Your selfie isn’t added to the gallery or shown to anyone.',
-              'You can clear your search history anytime.',
+              'Your selfie isn’t stored, added to the gallery or shown to anyone.',
+              'The organizer sees your name and email, so they know who searched.',
             ].map((t) => (
               <li key={t} className="flex gap-3">
                 <span className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-500" />
@@ -120,10 +142,10 @@ function Consent({ ev, onAccept, onClose }) {
               </Link>
             </span>
           </label>
-          <Button size="lg" className="mt-5 w-full" disabled={!agree} onClick={onAccept}>
+          <Button type="submit" size="lg" className="mt-5 w-full" disabled={!agree}>
             Continue
           </Button>
-        </motion.div>
+        </motion.form>
       </div>
     </div>
   )
@@ -213,7 +235,10 @@ export default function Search() {
   const { data: ev, error: loadError, loading } = useQuery(() => getGuestEvent(eventId), [eventId], { live: false })
   useDocumentTitle(ev ? `Find your photos · ${ev.name}` : 'Find your photos')
 
-  const [step, setStep] = useState(() => (hasConsent(user.id, eventId) ? mode : 'consent'))
+  const consentId = user?.id ?? 'guest'
+  const [visitor, setVisitor] = useState(() => savedVisitor() || (user ? { name: user.name, email: user.email } : null))
+  const [step, setStep] = useState(() => (hasConsent(consentId, eventId) && savedVisitor() ? mode : 'consent'))
+  const [detailsError, setDetailsError] = useState(null)
   const [error, setError] = useState(null)
   const [preview, setPreview] = useState(null)
   const [msgIndex, setMsgIndex] = useState(0)
@@ -233,18 +258,24 @@ export default function Search() {
       setMsgIndex(0)
       try {
         const started = Date.now()
-        const result = await search(eventId, blobs)
+        const result = await search(eventId, blobs, visitor)
         // let the progress animation land instead of flashing past
         await new Promise((r) => setTimeout(r, Math.max(0, 2400 - (Date.now() - started))))
         setFound(result.hits.length)
         setStep('found')
         setTimeout(() => navigate(`/events/${eventId}/results`, { replace: true, state: { fresh: true } }), result.hits.length ? 2300 : 900)
       } catch (e) {
+        if (e instanceof FaceError && e.code === 'details') {
+          // the server didn't accept the name/email: ask again
+          setDetailsError(e.message)
+          setStep('consent')
+          return
+        }
         setError(e instanceof FaceError ? e.code : 'failed')
         setStep('error')
       }
     },
-    [eventId, navigate],
+    [eventId, navigate, visitor],
   )
 
   // cycle the contextual search messages
@@ -282,9 +313,15 @@ export default function Search() {
       {step === 'consent' && (
         <Consent
           ev={ev}
+          initial={visitor}
+          agreed={hasConsent(consentId, eventId)}
+          serverError={detailsError}
           onClose={close}
-          onAccept={() => {
-            giveConsent(user.id, eventId)
+          onAccept={(v) => {
+            giveConsent(consentId, eventId)
+            saveVisitor(v)
+            setVisitor(v)
+            setDetailsError(null)
             setStep(mode)
           }}
         />

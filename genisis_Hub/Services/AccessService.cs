@@ -17,7 +17,11 @@ namespace genisis_Hub.Services
     {
         public static readonly string[] GuestVisibleStatuses = { "Active", "Completed" };
         private readonly DbContext _db;
-        public AccessService(DbContext db) => _db = db;
+        private readonly IConfiguration _config;
+        public AccessService(DbContext db, IConfiguration config)
+        {
+            _db = db; _config = config;
+        }
 
         /// <summary>Event-level permissions. SuperAdmin gets a full set; null = no access.</summary>
         public async Task<EventAdmin?> PermissionsAsync(ulong eventId, ClaimsPrincipal user)
@@ -49,28 +53,38 @@ namespace genisis_Hub.Services
         /// <summary>
         /// Admins: can_view on the photo's event. Guests: the photo must be in
         /// one of their own search results -- a guest can never browse a gallery.
+        /// Visitors without an account: the photo must be in the search their
+        /// SearchPass key (?key=) was issued for.
         /// </summary>
-        public async Task<bool> CanViewPhotoAsync(Photo photo, ClaimsPrincipal user)
+        public async Task<bool> CanViewPhotoAsync(Photo photo, ClaimsPrincipal user, string? key = null)
         {
             if (user.IsSuperAdmin()) return true;
             if (user.IsInRole(Roles.EventAdmin) && await CanAsync(photo.EventId, user, p => p.CanView)) return true;
             using var conn = _db.CreateConnection();
+            if (SearchPass.Validate(_config, key) is ulong searchId
+                && await conn.ExecuteScalarAsync<long>(
+                    "SELECT COUNT(*) FROM search_matches WHERE search_id=@SearchId AND photo_id=@PhotoId",
+                    new { SearchId = searchId, PhotoId = photo.PhotoId }) > 0)
+                return true;
+            var userId = JwtHelper.GetUserId(user);
+            if (userId == 0) return false;
             var n = await conn.ExecuteScalarAsync<long>(@"
                 SELECT COUNT(*) FROM search_matches sm
                 JOIN searches s ON s.search_id = sm.search_id
                 WHERE sm.photo_id = @PhotoId AND s.guest_id = @UserId",
-                new { PhotoId = photo.PhotoId, UserId = JwtHelper.GetUserId(user) });
+                new { PhotoId = photo.PhotoId, UserId = userId });
             return n > 0;
         }
 
-        /// <summary>Owner of the search, a SuperAdmin, or an admin of that event.</summary>
-        public async Task<bool> CanViewSearchAsync(ulong searchId, ClaimsPrincipal user)
+        /// <summary>Owner of the search (or holder of its SearchPass key), a SuperAdmin, or an admin of that event.</summary>
+        public async Task<bool> CanViewSearchAsync(ulong searchId, ClaimsPrincipal user, string? key = null)
         {
+            if (SearchPass.Validate(_config, key) == searchId) return true;
             using var conn = _db.CreateConnection();
             var s = await conn.QueryFirstOrDefaultAsync<(ulong EventId, ulong? GuestId)>(
                 "SELECT event_id, guest_id FROM searches WHERE search_id=@SearchId", new { SearchId = searchId });
             if (s == default) return false;
-            if (s.GuestId == JwtHelper.GetUserId(user)) return true;
+            if (s.GuestId is not null && s.GuestId == JwtHelper.GetUserId(user)) return true;
             return await CanAsync(s.EventId, user, p => p.CanView);
         }
     }

@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu as MenuIcon,
+  ScanFace,
   Settings,
   ShieldCheck,
   UserCog,
@@ -27,7 +28,8 @@ const NAV = {
     { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
     { to: '/admin/events', label: 'Events', icon: CalendarDays },
     { to: '/admin/admins', label: 'Event Admins', icon: UserCog },
-    { to: '/admin/users', label: 'Users', icon: Users },
+    { to: '/admin/visitors', label: 'Visitors', icon: ScanFace },
+    { to: '/admin/users', label: 'Accounts', icon: Users },
     { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
     { to: '/admin/settings', label: 'Settings', icon: Settings },
   ],
@@ -51,7 +53,7 @@ function Sidebar({ role, onNavigate }) {
   return (
     <div className="flex h-full flex-col bg-navy-950 text-navy-200">
       <div className="flex h-16 items-center px-5">
-        <Logo dark to={role === 'super_admin' ? '/admin' : '/event-admin'} />
+        <Logo dark />
       </div>
       <div className="px-5 pb-4">
         <span className="inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-1 text-[11px] font-medium tracking-wide text-navy-300 uppercase ring-1 ring-white/10">
@@ -109,7 +111,7 @@ function Sidebar({ role, onNavigate }) {
               ))}
               {data && !assigned.length && <li className="px-3 py-2 text-[13px] text-navy-500">No events assigned yet.</li>}
             </ul>
-            <p className="mt-3 px-3 text-[12px] leading-relaxed text-navy-500">You can only see events a Super Admin has assigned to you.</p>
+            <p className="mt-3 px-3 text-[12px] leading-relaxed text-navy-500">Events you created or a Super Admin assigned to you.</p>
           </div>
         )}
       </nav>
@@ -150,7 +152,7 @@ export default function ConsoleLayout({ role }) {
         <button onClick={() => setOpen(true)} className="grid size-10 place-items-center rounded-lg text-navy-800 hover:bg-navy-100" aria-label="Open navigation">
           <MenuIcon className="size-5" />
         </button>
-        <Logo to={role === 'super_admin' ? '/admin' : '/event-admin'} size={28} />
+        <Logo size={28} />
       </header>
       <Drawer open={open} onClose={() => setOpen(false)} side="left" className="max-w-[288px]">
         <Sidebar role={role} onNavigate={() => setOpen(false)} />

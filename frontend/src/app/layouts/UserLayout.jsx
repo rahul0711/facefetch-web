@@ -1,6 +1,7 @@
 import { CalendarHeart, Heart, Images, LogOut, Settings, UserRound } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
+import Button from '../components/ui/Button'
 import Logo from '../components/ui/Logo'
 import { Menu } from '../components/ui/overlay'
 import { Avatar } from '../components/ui/primitives'
@@ -13,14 +14,33 @@ const NAV = [
   { to: '/profile', label: 'Profile', icon: UserRound },
 ]
 
+// Visitors without an account only get the events list (no profile, favorites
+// or account menu); the event pages themselves work the same for everyone.
 export default function UserLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  if (!user) {
+    return (
+      <div className="min-h-dvh bg-canvas">
+        <header className="sticky top-0 z-40 border-b border-navy-100/80 bg-white/80 backdrop-blur-xl">
+          <div className="container-page flex h-16 items-center gap-8">
+            <Logo />
+            <Button to="/login" variant="ghost" size="sm" className="ml-auto">
+              Admin login
+            </Button>
+          </div>
+        </header>
+        <main>
+          <Outlet />
+        </main>
+      </div>
+    )
+  }
   return (
     <div className="min-h-dvh bg-canvas pb-24 md:pb-0">
       <header className="sticky top-0 z-40 border-b border-navy-100/80 bg-white/80 backdrop-blur-xl">
         <div className="container-page flex h-16 items-center gap-8">
-          <Logo to="/events" />
+          <Logo />
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
             {NAV.slice(0, 3).map((n) => (
               <NavLink

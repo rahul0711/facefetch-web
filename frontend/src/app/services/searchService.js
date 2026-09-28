@@ -1,5 +1,5 @@
 // Face search (C# backend -> Python engine). One event at a time.
-import { api, ApiError } from './api'
+import { api, ApiError, getToken } from './api'
 import { toMatch, toSearch } from './adapters'
 import { emitChange } from './bus'
 
@@ -30,10 +30,35 @@ function cachedSearch(eventId) {
   }
 }
 
-/** blobs: 1-5 selfie frames of the same person. */
-export async function search(eventId, blobs) {
+// The name + email a visitor gives before searching (the organizer sees who
+// searched). Remembered in this browser so repeat searches skip the form.
+const VISITOR_KEY = 'gh.visitor'
+
+export function savedVisitor() {
+  try {
+    const v = JSON.parse(localStorage.getItem(VISITOR_KEY) || 'null')
+    return v?.name && v?.email ? v : null
+  } catch {
+    return null
+  }
+}
+
+export function saveVisitor(v) {
+  try {
+    localStorage.setItem(VISITOR_KEY, JSON.stringify({ name: v.name.trim(), email: v.email.trim() }))
+  } catch {
+    // storage blocked: asked again next time
+  }
+}
+
+export const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim())
+
+/** blobs: 1-5 selfie frames of the same person; visitor: { name, email }. */
+export async function search(eventId, blobs, visitor) {
   const form = new FormData()
   blobs.forEach((b, i) => form.append('selfies', b, `selfie-${i}.jpg`))
+  form.append('name', visitor.name.trim())
+  form.append('email', visitor.email.trim())
   try {
     const s = toSearch(await api(`/api/search/${eventId}`, { method: 'POST', form }))
     cacheSearch(s)
@@ -45,6 +70,7 @@ export async function search(eventId, blobs) {
         const reason = e.data?.reason
         throw new FaceError(reason === 'FaceTooSmall' ? 'too_small' : reason === 'Unreadable' ? 'unreadable' : 'no_face', e.message)
       }
+      if (e.status === 400) throw new FaceError('details', e.message)
       if (e.status === 404) throw new FaceError('not_found', 'This event isn’t available for search.')
       if (e.status === 503) throw new FaceError('offline', e.message)
     }
@@ -56,6 +82,7 @@ export async function search(eventId, blobs) {
 export async function lastSearch(eventId) {
   const cached = cachedSearch(eventId)
   if (cached) return cached
+  if (!getToken()) return null // visitors without an account have no saved searches
   try {
     const s = toSearch(await api(`/api/search/my/latest/${eventId}`))
     cacheSearch(s)
@@ -66,8 +93,13 @@ export async function lastSearch(eventId) {
   }
 }
 
+/** Everyone who searched (name + email), one row per email. eventId omitted = every event (Super Admin). */
+export async function listVisitors(eventId) {
+  return api(eventId == null ? '/api/admin/visitors' : `/api/search/event/${eventId}/visitors`)
+}
+
 export async function mySearches() {
-  return api('/api/search/my')
+  return getToken() ? api('/api/search/my') : []
 }
 
 export async function myPhotos() {

@@ -4,7 +4,7 @@ import Logo, { PixelCluster } from '../../components/ui/Logo'
 import { pool } from '../../data/gallery'
 import { GridBackdrop } from '../../components/effects'
 
-// Split-screen shell for login/signup: form on the left, a quiet photo
+// Split-screen shell for login: form on the left, a quiet photo
 // collage with a found-you moment on the right.
 export default function AuthShell({ children }) {
   const photos = [pool('wedding')[4], pool('party')[6], pool('collegefest')[15], pool('wedding')[10], pool('summit')[12], pool('party')[9]].filter(Boolean)

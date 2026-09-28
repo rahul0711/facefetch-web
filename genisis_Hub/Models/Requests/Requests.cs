@@ -10,16 +10,29 @@ namespace genisis_Hub.Models.Requests
         public string Password { get; set; } = string.Empty;
     }
 
-    public class SignupRequest
+    /// <summary>A Google Drive folder or file link shared as "Anyone with the link".</summary>
+    public class DriveListRequest
     {
-        [Required, MaxLength(150)]
-        public string FullName { get; set; } = string.Empty;
-        [Required, EmailAddress, MaxLength(255)]
-        public string Email    { get; set; } = string.Empty;
-        [Required, MinLength(6)]
-        public string Password { get; set; } = string.Empty;
-        [MaxLength(30)]
-        public string? Phone   { get; set; }
+        [Required, MaxLength(2000)]
+        public string Url { get; set; } = string.Empty;
+        public bool IncludeSubfolders { get; set; } = true;
+    }
+
+    public class DriveImportFile
+    {
+        [Required, MaxLength(200)]
+        public string Id { get; set; } = string.Empty;
+        [Required, MaxLength(255)]
+        public string Name { get; set; } = string.Empty;
+        [MaxLength(200)]
+        public string? ResourceKey { get; set; }
+    }
+
+    /// <summary>A small batch of files from a listing; the browser sends the folder a few at a time.</summary>
+    public class DriveImportRequest
+    {
+        [Required, MinLength(1), MaxLength(10)]
+        public List<DriveImportFile> Files { get; set; } = new();
     }
 
     public class UpdateProfileRequest

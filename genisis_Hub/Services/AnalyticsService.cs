@@ -26,7 +26,7 @@ namespace genisis_Hub.Services
                   (SELECT COUNT(*) FROM faces f JOIN photos p ON p.photo_id=f.photo_id WHERE p.event_id=@EventId) AS Faces,
                   (SELECT COUNT(*) FROM searches WHERE event_id=@EventId)                            AS Searches,
                   (SELECT COUNT(*) FROM searches WHERE event_id=@EventId AND match_count > 0)        AS SuccessfulSearches,
-                  (SELECT COUNT(DISTINCT guest_id) FROM searches WHERE event_id=@EventId AND guest_id IS NOT NULL) AS UniqueVisitors,
+                  (SELECT COUNT(DISTINCT LOWER(visitor_email)) FROM searches WHERE event_id=@EventId AND visitor_email IS NOT NULL) AS UniqueVisitors,
                   (SELECT COUNT(*) FROM downloads WHERE event_id=@EventId)                           AS Downloads,
                   (SELECT COALESCE(SUM(file_size),0) FROM photos WHERE event_id=@EventId)            AS StorageBytes",
                 new { EventId = eventId });
@@ -54,10 +54,10 @@ namespace genisis_Hub.Services
                   (SELECT COUNT(*) FROM searches s WHERE s.match_count > 0 {Where("s.event_id")})                AS successfulSearches,
                   (SELECT COUNT(*) FROM searches s WHERE DATE(s.started_at)=CURDATE() {Where("s.event_id")})     AS searchesToday,
                   (SELECT COUNT(*) FROM searches s WHERE DATE(s.started_at)=CURDATE()-INTERVAL 1 DAY {Where("s.event_id")}) AS searchesYesterday,
-                  (SELECT COUNT(DISTINCT s.guest_id) FROM searches s WHERE s.guest_id IS NOT NULL {Where("s.event_id")}) AS uniqueVisitors,
+                  (SELECT COUNT(DISTINCT LOWER(s.visitor_email)) FROM searches s WHERE s.visitor_email IS NOT NULL {Where("s.event_id")}) AS uniqueVisitors,
                   (SELECT COUNT(*) FROM downloads d WHERE 1=1 {Where("d.event_id")})                             AS downloads,
                   (SELECT COALESCE(SUM(p.file_size),0) FROM photos p WHERE 1=1 {Where("p.event_id")})            AS storageBytes,
-                  (SELECT COUNT(*) FROM users u JOIN roles r ON r.role_id=u.role_id WHERE r.role_name='Guest')      AS guests,
+                  (SELECT COUNT(DISTINCT LOWER(visitor_email)) FROM searches WHERE visitor_email IS NOT NULL) AS guests,
                   (SELECT COUNT(*) FROM users u JOIN roles r ON r.role_id=u.role_id WHERE r.role_name='EventAdmin') AS eventAdmins", p);
 
             var result = new AnalyticsResponse

@@ -3,6 +3,7 @@ using genisis_Hub.Models.Requests;
 using genisis_Hub.Models.Responses;
 using genisis_Hub.Services;
 using Microsoft.AspNetCore.Authorization;
+using MySqlConnector;
 using Microsoft.AspNetCore.Mvc;
 
 namespace genisis_Hub.Controllers
@@ -22,11 +23,14 @@ namespace genisis_Hub.Controllers
         private readonly AccessService _access;
         private readonly AnalyticsService _analytics;
         private readonly ActivityLogService _log;
+        private readonly GoogleDriveService _drive;
+        private readonly SettingsService _settings;
 
         public EventAdminController(IEventService events, IPhotoService photos, IDownloadService downloads,
-            AccessService access, AnalyticsService analytics, ActivityLogService log)
+            AccessService access, AnalyticsService analytics, ActivityLogService log, GoogleDriveService drive, SettingsService settings)
         {
             _events = events; _photos = photos; _downloads = downloads; _access = access; _analytics = analytics; _log = log;
+            _drive = drive; _settings = settings;
         }
 
         private async Task<List<ulong>> MyEventIdsAsync()
@@ -102,6 +106,104 @@ namespace genisis_Hub.Controllers
             foreach (var file in files) results.Add(await _photos.UploadAsync(file, eventId, userId));
             await _log.LogAsync(userId, eventId, "PHOTOS_UPLOADED", $"{results.Count(r => r.PhotoId != null)} of {files.Count} photo(s) stored");
             return Ok(ApiResponse<object>.Ok(results, $"{results.Count(r => r.Status == "Completed")} of {files.Count} photo(s) processed"));
+        }
+
+        // ── Google Drive import ────────────────────────────────────────────────
+        // 1. POST .../drive/list   { url, includeSubfolders }  -> the photos in that folder
+        // 2. POST .../drive/import { files: [ ...up to 10 ] }  -> each downloaded + indexed like an upload
+        // The browser calls (2) a few files at a time, so a big folder never
+        // becomes one long request, and shows progress as it goes.
+
+        private const string DriveRefPrefix = "gdrive:";
+        private const string SourceRefMissing = "The database is missing photos.source_ref. Run the Google Drive SQL update in MySQL, then try again.";
+
+        /// <summary>Photo files the pipeline accepts: by extension, or by MIME type when the name has none.</summary>
+        private static string? PhotoName(string name, string mime, HashSet<string> allowed)
+        {
+            var ext = Path.GetExtension(name).TrimStart('.').ToLowerInvariant();
+            if (allowed.Contains(ext)) return name;
+            var byMime = mime switch { "image/jpeg" => "jpg", "image/png" => "png", "image/webp" => "webp", _ => null };
+            return byMime != null && allowed.Contains(byMime) && ext == "" ? $"{name}.{byMime}" : null;
+        }
+
+        // POST api/eventadmin/{eventId}/drive/list
+        [HttpPost("{eventId:long}/drive/list")]
+        public async Task<IActionResult> DriveList(ulong eventId, [FromBody] DriveListRequest request, CancellationToken ct)
+        {
+            if (!await _access.CanAsync(eventId, User, p => p.CanUpload)) return Forbid();
+            var link = GoogleDriveService.Parse(request.Url);
+            if (link == null) return BadRequest(ApiResponse<object>.Fail("That doesn’t look like a Google Drive link. Copy the link from Drive’s “Share” button."));
+            try
+            {
+                var info = await _drive.GetInfoAsync(link, ct);
+                var allowed = await _settings.AllowedImageTypesAsync();
+                List<DriveFile> all;
+                var truncated = false;
+                if (info.IsFolder) (all, truncated) = await _drive.ListAsync(link.Id, info.ResourceKey, request.IncludeSubfolders, ct);
+                else all = new() { new DriveFile(link.Id, info.Name, "", info.MimeType, info.Size, info.ResourceKey) };
+
+                var photos = all.Select(f => (File: f, Name: PhotoName(f.Name, f.MimeType, allowed))).Where(x => x.Name != null).ToList();
+                HashSet<string> existing;
+                try { existing = await _photos.ExistingSourceRefsAsync(eventId, photos.Select(x => DriveRefPrefix + x.File.Id)); }
+                catch (MySqlException ex) when (ex.ErrorCode == MySqlErrorCode.BadFieldError) { return StatusCode(500, ApiResponse<object>.Fail(SourceRefMissing)); }
+
+                return Ok(ApiResponse<object>.Ok(new
+                {
+                    name = info.Name,
+                    isFolder = info.IsFolder,
+                    truncated,
+                    skipped = all.Count - photos.Count, // not photos (videos, docs, HEIC...)
+                    files = photos.Select(x => new
+                    {
+                        id = x.File.Id,
+                        name = x.Name,
+                        path = x.File.Path,
+                        size = x.File.Size,
+                        resourceKey = x.File.ResourceKey,
+                        alreadyImported = existing.Contains(DriveRefPrefix + x.File.Id),
+                    }),
+                }));
+            }
+            catch (DriveException ex) { return BadRequest(ApiResponse<object>.Fail(ex.Message)); }
+            catch (HttpRequestException) { return StatusCode(503, ApiResponse<object>.Fail("Couldn’t reach Google Drive. Check the server’s internet connection and try again.")); }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested) { return StatusCode(504, ApiResponse<object>.Fail("Google Drive took too long to answer. Try again.")); }
+        }
+
+        // POST api/eventadmin/{eventId}/drive/import
+        [HttpPost("{eventId:long}/drive/import")]
+        public async Task<IActionResult> DriveImport(ulong eventId, [FromBody] DriveImportRequest request, CancellationToken ct)
+        {
+            if (!ModelState.IsValid) return BadRequest(ApiResponse<object>.Fail("Send 1-10 files per request"));
+            if (!await _access.CanAsync(eventId, User, p => p.CanUpload)) return Forbid();
+            if (await _events.GetEventByIdAsync(eventId) == null) return NotFound(ApiResponse<object>.Fail("Event not found"));
+
+            HashSet<string> existing;
+            try { existing = await _photos.ExistingSourceRefsAsync(eventId, request.Files.Select(f => DriveRefPrefix + f.Id)); }
+            catch (MySqlException ex) when (ex.ErrorCode == MySqlErrorCode.BadFieldError) { return StatusCode(500, ApiResponse<object>.Fail(SourceRefMissing)); }
+
+            var userId = JwtHelper.GetUserId(User);
+            var maxBytes = await _settings.MaxUploadBytesAsync();
+            var results = new List<UploadResultItem>();
+            foreach (var f in request.Files)
+            {
+                var sourceRef = DriveRefPrefix + f.Id;
+                if (existing.Contains(sourceRef))
+                {
+                    results.Add(new UploadResultItem { FileName = f.Name, Status = "Rejected", Error = "Already in this event" });
+                    continue;
+                }
+                try
+                {
+                    await using var data = await _drive.DownloadAsync(f.Id, f.ResourceKey, maxBytes, ct);
+                    results.Add(await _photos.UploadAsync(data, f.Name, data.Length, eventId, userId, sourceRef));
+                    existing.Add(sourceRef); // the same id twice in one batch
+                }
+                catch (DriveException ex) { results.Add(new UploadResultItem { FileName = f.Name, Status = "Rejected", Error = ex.Message }); }
+                catch (HttpRequestException) { results.Add(new UploadResultItem { FileName = f.Name, Status = "Failed", Error = "Couldn’t download from Google Drive" }); }
+                catch (TaskCanceledException) when (!ct.IsCancellationRequested) { results.Add(new UploadResultItem { FileName = f.Name, Status = "Failed", Error = "Google Drive download timed out" }); }
+            }
+            await _log.LogAsync(userId, eventId, "PHOTOS_IMPORTED_DRIVE", $"{results.Count(r => r.PhotoId != null)} of {request.Files.Count} photo(s) imported from Google Drive");
+            return Ok(ApiResponse<object>.Ok(results, $"{results.Count(r => r.Status == "Completed")} of {request.Files.Count} photo(s) processed"));
         }
 
         // POST api/eventadmin/{eventId}/photos/{photoId}/reanalyze

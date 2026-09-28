@@ -45,7 +45,7 @@ export function GridBackdrop({ className, dark }) {
 }
 
 // Aceternity "Infinite Moving Cards", simplified to a CSS marquee.
-export function Marquee({ children, duration = 40, className, gap = '1rem' }) {
+export function Marquee({ children, duration = 40, className, gap = '1rem', reverse = false }) {
   return (
     <div
       className={cn('group relative flex overflow-hidden', className)}
@@ -56,7 +56,7 @@ export function Marquee({ children, duration = 40, className, gap = '1rem' }) {
         WebkitMaskImage: 'linear-gradient(to right, transparent, #000 10%, #000 90%, transparent)',
       }}
     >
-      <div className="flex w-max shrink-0 animate-marquee group-hover:[animation-play-state:paused]" style={{ gap }}>
+      <div className="flex w-max shrink-0 animate-marquee group-hover:[animation-play-state:paused]" style={{ gap, animationDirection: reverse ? 'reverse' : undefined }}>
         {children}
         <div className="flex shrink-0" style={{ gap }} aria-hidden>
           {children}

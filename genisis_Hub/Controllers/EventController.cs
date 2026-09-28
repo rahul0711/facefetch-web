@@ -78,9 +78,10 @@ namespace genisis_Hub.Controllers
             return Ok(ApiResponse<object>.Ok(EventResponse.From(ev)));
         }
 
-        // POST api/events  -- SuperAdmin
+        // POST api/events  -- SuperAdmin or EventAdmin. An event admin is assigned to the
+        // event they create with every permission, so it shows up in their console.
         [HttpPost]
-        [Authorize(Roles = "SuperAdmin")]
+        [Authorize(Roles = "EventAdmin,SuperAdmin")]
         public async Task<IActionResult> Create([FromBody] CreateEventRequest request)
         {
             if (!ModelState.IsValid) return BadRequest(ApiResponse<object>.Fail("Invalid input"));
@@ -90,6 +91,11 @@ namespace genisis_Hub.Controllers
             ulong eventId;
             try { eventId = await _events.CreateEventAsync(request, userId); }
             catch (ArgumentException ex) { return BadRequest(ApiResponse<object>.Fail(ex.Message)); }
+            if (!User.IsSuperAdmin())
+                await _events.AssignAdminAsync(eventId, new AssignAdminRequest
+                {
+                    UserId = userId, CanView = true, CanUpload = true, CanDelete = true, CanManage = true,
+                }, userId);
             var created = await _events.GetEventByIdAsync(eventId);
             await _log.LogAsync(userId, eventId, "EVENT_CREATED", request.EventName);
             return CreatedAtAction(nameof(GetById), new { id = eventId }, ApiResponse<object>.Ok(EventResponse.From(created!), "Event created"));

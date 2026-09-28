@@ -34,18 +34,6 @@ namespace genisis_Hub.Controllers
             return Ok(ApiResponse<object>.Ok(result, "Login successful"));
         }
 
-        // POST api/auth/signup  -- always creates a Guest
-        [HttpPost("signup")]
-        public async Task<IActionResult> Signup([FromBody] SignupRequest request)
-        {
-            if (!ModelState.IsValid) return BadRequest(ApiResponse<object>.Fail("Invalid input"));
-            var user = await _auth.SignupAsync(request);
-            if (user == null) return Conflict(ApiResponse<object>.Fail("Email already registered"));
-
-            await _log.LogAsync(user.UserId, null, "SIGNUP", $"{user.Email} signed up");
-            return Ok(ApiResponse<object>.Ok(new { user.UserId, user.FullName, user.Email, user.RoleName }, "Account created"));
-        }
-
         // GET api/auth/me
         [HttpGet("me")]
         [Authorize]

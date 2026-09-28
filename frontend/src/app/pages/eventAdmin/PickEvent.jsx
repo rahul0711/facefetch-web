@@ -37,7 +37,7 @@ export default function PickEvent() {
         </ul>
       ) : (
         <EmptyState icon={CalendarRange} title="No events assigned yet" className="rounded-2xl border border-navy-100 bg-white">
-          Photos can be uploaded once a Super Admin assigns you to an event.
+          Create an event first, then upload its photos here.
         </EmptyState>
       )}
     </div>

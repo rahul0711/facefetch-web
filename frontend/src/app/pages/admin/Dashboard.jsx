@@ -51,7 +51,7 @@ export default function AdminDashboard() {
         <StatCard label="Total events" value={num(t.events)} icon={CalendarDays} hint={`${t.active} active`} />
         <StatCard label="Active events" value={num(t.active)} icon={CalendarCheck} hint="open to guests" />
         <StatCard label="Event admins" value={num(t.admins)} icon={UserCog} />
-        <StatCard label="Guests" value={num(t.guests)} icon={Users} hint={`${num(t.visitors)} have searched`} />
+        <StatCard label="Visitors" value={num(t.guests)} icon={Users} hint="people who searched" />
         <StatCard label="Photos uploaded" value={compact(t.photos)} icon={Images} hint={`${compact(t.faces)} faces indexed`} />
         <StatCard label="Face searches" value={compact(t.searches)} icon={ScanSearch} hint={`${Math.round(t.successRate * 100)}% found a match`} />
         <StatCard label="Downloads" value={compact(t.downloads)} icon={Download} hint="by guests" />

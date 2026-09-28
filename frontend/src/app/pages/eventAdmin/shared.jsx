@@ -22,7 +22,7 @@ export function useAdminEvent() {
 export function NotAssigned() {
   return (
     <EmptyState icon={ShieldAlert} title="This event isn’t assigned to you" action={<Button to="/event-admin/events">Your events</Button>} className="rounded-2xl border border-navy-100 bg-white">
-      Event admins can only open events a Super Admin has assigned to them. Ask your Super Admin for access.
+      Event admins can open events they created or a Super Admin assigned to them. Ask your Super Admin for access.
     </EmptyState>
   )
 }

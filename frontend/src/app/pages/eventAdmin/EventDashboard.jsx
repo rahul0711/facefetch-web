@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { Panel, StatusStack } from '../../components/charts'
 import { StatStrip } from '../../components/console'
 import Photo from '../../components/Photo'
+import VisitorsTable from '../../components/VisitorsTable'
 import Button from '../../components/ui/Button'
 import { useToast } from '../../components/ui/overlay'
 import { EmptyState } from '../../components/ui/primitives'
@@ -87,6 +88,10 @@ export default function EAEventDashboard() {
           {stats && <StatusStack counts={stats.processing} />}
         </Panel>
       </div>
+
+      <Panel title="Visitors" description="Who searched this event: the name and email they gave before their selfie">
+        <VisitorsTable eventId={ev.eventId} />
+      </Panel>
     </div>
   )
 }

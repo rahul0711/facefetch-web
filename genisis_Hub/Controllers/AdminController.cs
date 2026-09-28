@@ -60,6 +60,11 @@ namespace genisis_Hub.Controllers
         public async Task<IActionResult> Analytics([FromQuery] int days = 30)
             => Ok(ApiResponse<object>.Ok(await _analytics.AnalyticsAsync(days)));
 
+        // GET api/admin/visitors?q=text  -- everyone who searched, across all events
+        [HttpGet("visitors")]
+        public async Task<IActionResult> Visitors([FromServices] ISearchService search, [FromQuery] string? q = null)
+            => Ok(ApiResponse<object>.Ok(await search.GetVisitorsAsync(null, q)));
+
         // GET api/admin/users?role=Guest&search=text
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers([FromQuery] string? role = null, [FromQuery] string? search = null)
@@ -186,7 +191,9 @@ namespace genisis_Hub.Controllers
                 new { Value = value, UserId = JwtHelper.GetUserId(User), Key = key });
             if (rows == 0) return NotFound(ApiResponse<object>.Fail("Setting not found"));
             SettingsService.Invalidate();
-            await _log.LogAsync(JwtHelper.GetUserId(User), null, "SETTING_UPDATED", $"{key} = {value}");
+            // never write secrets (the Google API key) into the activity log
+            var logged = key.EndsWith("_key") ? (value.Length > 4 ? $"…{value[^4..]}" : "(set)") : value;
+            await _log.LogAsync(JwtHelper.GetUserId(User), null, "SETTING_UPDATED", $"{key} = {logged}");
             return Ok(ApiResponse.Ok("Setting updated"));
         }
 

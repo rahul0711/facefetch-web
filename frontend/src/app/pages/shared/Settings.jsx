@@ -165,7 +165,14 @@ function SettingRow({ s }) {
       </div>
       {s.description && <p className="text-[13px] text-navy-500">{s.description}</p>}
       <div className="flex gap-2">
-        <Input id={`s-${s.key}`} value={value} onChange={(e) => setValue(e.target.value)} className="h-10" />
+        <Input
+          id={`s-${s.key}`}
+          type={s.key.endsWith('_key') ? 'password' : 'text'}
+          autoComplete="off"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-10"
+        />
         <Button variant="secondary" onClick={save} loading={saving} disabled={value === s.value}>
           Save
         </Button>

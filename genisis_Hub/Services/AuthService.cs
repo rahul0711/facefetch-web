@@ -10,7 +10,6 @@ namespace genisis_Hub.Services
     public interface IAuthService
     {
         Task<LoginResponse?> LoginAsync(LoginRequest request, IConfiguration config);
-        Task<User?> SignupAsync(SignupRequest request);
         Task<User?> GetUserByIdAsync(ulong userId);
         Task<bool> ChangePasswordAsync(ulong userId, ChangePasswordRequest request);
         Task<bool> UpdateProfileImageAsync(ulong userId, string imagePath);
@@ -50,34 +49,6 @@ namespace genisis_Hub.Services
                 ProfileImage = user.ProfileImage,
                 ExpiresAt    = DateTime.UtcNow.AddHours(expiryHours)
             };
-        }
-
-        public async Task<User?> SignupAsync(SignupRequest request)
-        {
-            using var conn = _db.CreateConnection();
-
-            // Check duplicate email
-            var exists = await conn.QueryFirstOrDefaultAsync<int>(
-                "SELECT COUNT(*) FROM users WHERE email = @Email", new { request.Email });
-            if (exists > 0) return null;
-
-            // Get Guest role id
-            var guestRoleId = await conn.QueryFirstOrDefaultAsync<uint>(
-                "SELECT role_id FROM roles WHERE role_name = 'Guest'");
-
-            var sql = @"INSERT INTO users (full_name, email, password_hash, phone, role_id)
-                        VALUES (@FullName, @Email, @PasswordHash, @Phone, @RoleId);
-                        SELECT LAST_INSERT_ID();";
-            var newId = await conn.QueryFirstAsync<ulong>(sql, new
-            {
-                request.FullName,
-                request.Email,
-                PasswordHash = PasswordHelper.Hash(request.Password),
-                request.Phone,
-                RoleId = guestRoleId
-            });
-
-            return await GetUserByIdAsync(newId);
         }
 
         public async Task<User?> GetUserByIdAsync(ulong userId)

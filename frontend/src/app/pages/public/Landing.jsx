@@ -1,159 +1,146 @@
-import {
-  ArrowRight,
-  Briefcase,
-  Cake,
-  Camera,
-  Check,
-  ChevronDown,
-  CloudUpload,
-  Download,
-  GraduationCap,
-  Heart,
-  Link2,
-  Lock,
-  Mic,
-  Music,
-  PartyPopper,
-  ScanFace,
-  Search,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
-  Trophy,
-  UserPlus,
-  Zap,
-} from 'lucide-react'
-import { motion } from 'motion/react'
+import { ArrowDown, ArrowRight, Camera, EyeOff, Lock, Plus, ScanFace, ShieldCheck, UserRound } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from '../../auth/AuthContext'
-import { GridBackdrop, Marquee, Reveal, Spotlight } from '../../components/effects'
-import HeroVisual from '../../components/landing/HeroVisual'
+import { GridBackdrop, Marquee, Reveal } from '../../components/effects'
+import CompareSlider from '../../components/landing/CompareSlider'
+import FeatureBento from '../../components/landing/FeatureBento'
+import GuestFlow from '../../components/landing/GuestFlow'
+import MatchWall from '../../components/landing/MatchWall'
+import OrganizerSection from '../../components/landing/OrganizerSection'
+import ShineButton from '../../components/landing/ShineButton'
 import Photo from '../../components/Photo'
-import Button from '../../components/ui/Button'
-import { avatars, pick, pool } from '../../data/gallery'
-import { PixelCluster } from '../../components/ui/Logo'
+import { byIds, largestFace, selfie, thumb } from '../../data/gallery'
 import { useDocumentTitle } from '../../lib/hooks'
 import { cn } from '../../lib/utils'
 import { ROLE_HOME } from '../../services/authService'
 
-function SectionHeading({ eyebrow, title, children, center = true, dark }) {
+const EASE = [0.22, 1, 0.36, 1]
+
+function SectionHeading({ eyebrow, title, accent, children, center = true, dark, className }) {
   return (
-    <Reveal className={cn('max-w-2xl', center && 'mx-auto text-center')}>
-      <p className={cn('inline-flex items-center gap-2 text-sm font-semibold', dark ? 'text-cyan-300' : 'text-brand-700')}>
+    <Reveal className={cn('max-w-2xl', center && 'mx-auto text-center', className)}>
+      <p className={cn('inline-flex items-center gap-2 text-[13px] font-semibold tracking-[0.14em] uppercase', dark ? 'text-cyan-300' : 'text-brand-700')}>
         {/* the logo's pixel square as a quiet brand bullet */}
-        <span aria-hidden className={cn('size-2', dark ? 'bg-cyan-400' : 'bg-gradient-to-br from-brand-600 to-cyan-500')} />
+        <span aria-hidden className={cn('size-1.5', dark ? 'bg-cyan-300' : 'bg-brand-600')} />
         {eyebrow}
       </p>
-      <h2 className={cn('mt-3 text-3xl font-semibold sm:text-[44px] sm:leading-[1.08]', dark ? 'text-white' : 'text-navy-950')}>{title}</h2>
-      {children && <p className={cn('mt-4 text-lg leading-relaxed', dark ? 'text-navy-300' : 'text-navy-500')}>{children}</p>}
+      <h2 className={cn('mt-4 text-[34px] leading-[1.05] font-semibold tracking-[-0.03em] sm:text-5xl', dark ? 'text-white' : 'text-navy-950')}>
+        {title}
+        {accent && <span className={cn('font-serif font-normal tracking-normal italic', dark ? 'text-cyan-300' : 'text-brand-600')}> {accent}</span>}
+      </h2>
+      {children && <p className={cn('mt-5 text-lg leading-relaxed', dark ? 'text-navy-300' : 'text-navy-500')}>{children}</p>}
     </Reveal>
   )
 }
 
-// ------------------------------------------------------------------- hero
+// -------------------------------------------------------------------- hero
+
+function FoundToast() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: 1.4, duration: 0.8, ease: EASE }}
+      className="absolute right-8 bottom-12 z-10 hidden items-center gap-4 rounded-3xl bg-white/10 py-3 pr-6 pl-3 ring-1 ring-white/20 backdrop-blur-xl lg:flex xl:right-16"
+    >
+      <span className="relative size-14 overflow-hidden rounded-2xl ring-2 ring-cyan-300">
+        <img src={selfie.src} alt="" className="size-full object-cover object-[50%_22%]" />
+      </span>
+      <span>
+        <span className="block text-[13px] text-navy-200">Priya, we found you in</span>
+        <span className="block font-display text-xl font-semibold text-white">
+          38 photos <span className="font-serif text-base font-normal text-cyan-300 italic">of 2,438</span>
+        </span>
+      </span>
+    </motion.div>
+  )
+}
 
 function Hero({ primaryTo }) {
   return (
-    <section className="relative overflow-hidden bg-navy-950 pt-28 pb-24 sm:pt-36 lg:pb-32">
-      <Spotlight className="-top-40 left-0 md:-top-20 md:left-60" />
-      <GridBackdrop dark />
-      {/* the Genesis Hub arc, sweeping behind the hero */}
-      <svg aria-hidden viewBox="0 0 1440 700" preserveAspectRatio="none" className="pointer-events-none absolute inset-x-0 bottom-0 h-[70%] w-full opacity-60">
-        <defs>
-          <linearGradient id="hero-arc" x1="0" y1="1" x2="1" y2="0">
-            <stop stopColor="#0550bc" stopOpacity="0" />
-            <stop offset="0.45" stopColor="#0769ee" stopOpacity="0.55" />
-            <stop offset="1" stopColor="#05b0f6" stopOpacity="0.9" />
-          </linearGradient>
-        </defs>
-        <path d="M-40 690C260 360 760 170 1480 250" fill="none" stroke="url(#hero-arc)" strokeWidth="2" />
-        <path d="M-40 700C300 400 800 230 1480 320" fill="none" stroke="url(#hero-arc)" strokeWidth="1" opacity="0.5" />
-      </svg>
-      <div aria-hidden className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-navy-950" />
-      <div className="container-page relative grid items-center gap-16 lg:grid-cols-[1.05fr_1fr]">
-        <div className="max-lg:text-center">
+    <section className="relative isolate overflow-hidden bg-navy-950">
+      <MatchWall className="inset-0 lg:left-[36%]" />
+      {/* keep the headline legible over the moving wall */}
+      <div aria-hidden className="absolute inset-0 bg-navy-950/75 lg:hidden" />
+      <div aria-hidden className="absolute inset-0 hidden bg-[linear-gradient(90deg,#020e39_32%,rgb(2_14_57/0.82)_46%,rgb(2_14_57/0.1)_75%)] lg:block" />
+      <div aria-hidden className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-navy-950 to-transparent" />
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-navy-950 to-transparent" />
+
+      <div className="container-page relative flex min-h-[max(700px,100svh)] items-center pt-28 pb-24">
+        <div className="max-w-2xl max-lg:mx-auto max-lg:text-center">
           <motion.p
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 rounded-full bg-white/5 py-1 pr-3 pl-1 text-[13px] text-navy-200 ring-1 ring-white/10"
+            className="inline-flex items-center gap-2 rounded-full bg-white/5 py-1.5 pr-4 pl-1.5 text-[13px] text-navy-200 ring-1 ring-white/10 backdrop-blur"
           >
-            <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[11px] font-semibold text-white">New</span>
+            <span className="grid size-6 place-items-center rounded-full bg-cyan-300 text-navy-950">
+              <ScanFace className="size-3.5" />
+            </span>
             AI face search for event photos
           </motion.p>
           <motion.h1
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-6 text-[40px] leading-[1.05] font-bold tracking-[-0.035em] text-white sm:text-[56px] lg:text-[60px] xl:text-[66px]"
+            transition={{ delay: 0.08, duration: 0.9, ease: EASE }}
+            className="mt-7 text-[46px] leading-[0.98] font-bold tracking-[-0.045em] text-white sm:text-[68px] lg:text-[80px]"
           >
-            Find every moment <span className="text-gradient-brand">you’re in.</span>
+            Find every moment{' '}
+            <span className="bg-gradient-to-r from-cyan-200 via-cyan-300 to-brand-400 bg-clip-text pr-2 font-serif font-normal tracking-[-0.01em] text-transparent italic">you’re in.</span>
           </motion.h1>
           <motion.p
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.16, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-6 max-w-xl text-lg leading-relaxed text-navy-300 max-lg:mx-auto sm:text-xl"
+            transition={{ delay: 0.18, duration: 0.9, ease: EASE }}
+            className="mt-7 max-w-xl text-lg leading-relaxed text-navy-200 max-lg:mx-auto sm:text-xl"
           >
-            Thousands of event photos. One selfie. Every memory that matters, found in seconds instead of hours of scrolling.
+            Thousands of photos from the wedding, the fest, the summit. Take one selfie and get back only the ones you’re in, in about three seconds.
           </motion.p>
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.24, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-9 flex flex-wrap gap-3 max-lg:justify-center"
+            transition={{ delay: 0.28, duration: 0.9, ease: EASE }}
+            className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-4 max-lg:justify-center"
           >
-            <Button to={primaryTo} size="xl" className="shadow-[0_8px_30px_-6px_rgb(7_105_238/0.7)]">
-              <Camera /> Find My Photos
-            </Button>
-            <Button href="#how" size="xl" variant="glass">
-              See How It Works
-            </Button>
+            <ShineButton to={primaryTo}>
+              <Camera /> Find my photos
+            </ShineButton>
+            <a href="#how" className="group inline-flex items-center gap-2 text-[15px] font-medium text-white/80 hover:text-white">
+              See how it works <ArrowDown className="size-4 transition-transform group-hover:translate-y-0.5" />
+            </a>
           </motion.div>
           <motion.ul
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-sm text-navy-300 max-lg:justify-center"
+            transition={{ delay: 0.6 }}
+            className="mt-12 flex flex-wrap gap-x-7 gap-y-2 text-sm text-navy-300 max-lg:justify-center"
           >
-            {['No app to install', 'Works on any phone', 'Your selfie isn’t shared'].map((t) => (
+            {['No app', 'No account', 'Your selfie is never stored'].map((t) => (
               <li key={t} className="flex items-center gap-2">
-                <Check className="size-4 text-cyan-300" /> {t}
+                <span className="size-1.5 bg-cyan-300" /> {t}
               </li>
             ))}
           </motion.ul>
         </div>
-        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2, duration: 0.8 }} className="relative pb-6 lg:pl-6">
-          {/* the logo's trailing pixels, peeking out of the photo wall */}
-          <PixelCluster dark className="absolute -top-9 -right-3 z-10 size-12 max-sm:hidden" />
-          <HeroVisual />
-        </motion.div>
       </div>
+      <FoundToast />
     </section>
   )
 }
 
-// -------------------------------------------------------------- event types
+// ---------------------------------------------------------- occasion ribbon
 
-const EVENT_TYPES = [
-  [Heart, 'Weddings'],
-  [Mic, 'Conferences'],
-  [GraduationCap, 'College fests'],
-  [Briefcase, 'Corporate offsites'],
-  [Music, 'Concerts & festivals'],
-  [Trophy, 'Sports'],
-  [Cake, 'Birthdays'],
-  [PartyPopper, 'Parties'],
-  [Camera, 'Photography studios'],
-]
+const OCCASIONS_WORDS = ['Weddings', 'Convocations', 'Conferences', 'College fests', 'Concerts', 'Birthdays', 'Offsites', 'Sports days', 'Parties']
 
-function TrustStrip() {
+function OccasionRibbon() {
   return (
-    <section className="border-b border-navy-100 bg-white py-10" aria-label="Event types">
-      <p className="mb-6 text-center text-sm font-medium text-navy-500">Built for every event where the camera never stops</p>
-      <Marquee duration={45}>
-        {EVENT_TYPES.map(([Icon, label]) => (
-          <span key={label} className="flex items-center gap-2.5 rounded-full border border-navy-100 bg-navy-50/60 px-5 py-2.5 text-[15px] font-medium whitespace-nowrap text-navy-700">
-            <Icon className="size-4 text-brand-600" /> {label}
+    <section aria-label="Made for" className="border-b border-navy-100 bg-white py-8">
+      <Marquee duration={50} gap="2.5rem">
+        {OCCASIONS_WORDS.map((w) => (
+          <span key={w} className="flex items-center gap-10 font-serif text-3xl whitespace-nowrap text-navy-900 italic sm:text-4xl">
+            {w}
+            <span aria-hidden className="size-2 bg-gradient-to-br from-brand-600 to-cyan-400 not-italic" />
           </span>
         ))}
       </Marquee>
@@ -164,264 +151,255 @@ function TrustStrip() {
 // ------------------------------------------------------------ how it works
 
 function HowItWorks() {
-  const wedding = pool('wedding')
-  const steps = [
-    {
-      n: '01',
-      title: 'Choose your event',
-      text: 'Open the event you attended. You only ever search the photos from that event.',
-      visual: (
-        <div className="grid gap-2">
-          {[wedding[0], pool('techfest')[2]].map((p, i) => (
-            <div key={p.id} className={cn('flex items-center gap-3 rounded-xl bg-white p-2 ring-1 ring-navy-100', i === 0 && 'shadow-lift ring-brand-200')}>
-              <Photo photo={p} className="size-11 shrink-0 rounded-lg" />
-              <div className="min-w-0 text-left">
-                <div className="truncate text-[13px] font-semibold text-navy-900">{i === 0 ? 'Sarah & Arjun Wedding' : 'TechFest 2026'}</div>
-                <div className="text-[11px] text-navy-500">{i === 0 ? '21 Sep · Mumbai' : '18 Sep · Ahmedabad'}</div>
-              </div>
-              {i === 0 && <ArrowRight className="ml-auto size-4 shrink-0 text-brand-600" />}
-            </div>
-          ))}
-        </div>
-      ),
-    },
-    {
-      n: '02',
-      title: 'Take a selfie',
-      text: 'Hold up your phone, or upload a photo you like. It takes about three seconds.',
-      visual: (
-        <div className="mx-auto w-28 rounded-[20px] bg-navy-950 p-1.5 shadow-lift">
-          <div className="relative aspect-[9/16] overflow-hidden rounded-[15px]">
-            <img src={avatars[4].src} alt="" className="size-full object-cover" />
-            <span className="absolute inset-x-[16%] top-[18%] bottom-[30%] rounded-[50%] border-2 border-cyan-300 shadow-[0_0_0_999px_rgb(2_14_57/0.4)]" />
-            <span className="absolute inset-x-0 top-0 h-1/3 animate-scan bg-gradient-to-b from-transparent to-cyan-300/50" />
-          </div>
-        </div>
-      ),
-    },
-    {
-      n: '03',
-      title: 'Get your moments',
-      text: 'Every photo you’re in, best matches first. Favorite, download or share them.',
-      visual: (
-        <div className="grid grid-cols-3 gap-1.5">
-          {wedding.slice(3, 9).map((p) => (
-            <Photo key={p.id} photo={p} className="aspect-square rounded-lg" />
-          ))}
-        </div>
-      ),
-    },
-  ]
   return (
     <section id="how" className="scroll-mt-16 bg-white py-24 sm:py-32">
       <div className="container-page">
-        <SectionHeading eyebrow="How it works" title="Three steps. No scrolling.">
-          Guests find their photos without an app, a hashtag, or a 2,000-photo shared folder.
+        <SectionHeading eyebrow="For guests" title="Three steps." accent="Zero scrolling.">
+          No app to download, no account to create. Guests go from the event link to their own photos in under a minute.
         </SectionHeading>
-        <ol className="mt-16 grid gap-6 md:grid-cols-3">
-          {steps.map((s, i) => (
-            <Reveal key={s.n} delay={i * 0.08}>
-              <li className="flex h-full flex-col rounded-3xl border border-navy-100 bg-gradient-to-b from-navy-50/80 to-white p-6">
-                <div className="grid h-44 place-items-center rounded-2xl bg-navy-50 p-4 ring-1 ring-navy-100/80">
-                  <div className="w-full max-w-[240px]">{s.visual}</div>
-                </div>
-                <div className="mt-6 font-mono text-sm font-medium text-brand-600">{s.n}</div>
-                <h3 className="mt-1 text-xl font-semibold text-navy-950">{s.title}</h3>
-                <p className="mt-2 leading-relaxed text-navy-500">{s.text}</p>
-              </li>
-            </Reveal>
-          ))}
-        </ol>
+        <div className="mt-16 lg:mt-8">
+          <GuestFlow />
+        </div>
       </div>
     </section>
   )
 }
 
-// ----------------------------------------------------------- before/after
+// ------------------------------------------------------ shared: split heading
+
+// Title on the left, the supporting line on the right (so not every section
+// is a centred block).
+function SplitHeading({ eyebrow, title, children, dark }) {
+  return (
+    <Reveal className="grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-end lg:gap-16">
+      <div>
+        <p className={cn('inline-flex items-center gap-2 text-[13px] font-semibold tracking-[0.14em] uppercase', dark ? 'text-cyan-300' : 'text-brand-700')}>
+          <span aria-hidden className={cn('size-1.5', dark ? 'bg-cyan-300' : 'bg-brand-600')} />
+          {eyebrow}
+        </p>
+        <h2 className={cn('mt-4 text-[34px] leading-[1.04] font-semibold tracking-[-0.03em] sm:text-5xl lg:text-[56px]', dark ? 'text-white' : 'text-navy-950')}>{title}</h2>
+      </div>
+      {children && <p className={cn('max-w-lg text-lg leading-relaxed lg:pb-2', dark ? 'text-navy-300' : 'text-navy-500')}>{children}</p>}
+    </Reveal>
+  )
+}
+
+const Accent = ({ children, dark }) => <span className={cn('font-serif font-normal tracking-normal italic', dark ? 'text-cyan-300' : 'text-brand-600')}>{children}</span>
+
+// ---------------------------------------------------------- before / after
+
+const DIFFERENCE = [
+  ['2,438', 'photos in the shared folder'],
+  ['38', 'of them have you in them'],
+  ['~3 s', 'to find all 38 with one selfie'],
+]
 
 function BeforeAfter() {
-  const all = [...pool('wedding'), ...pool('party'), ...pool('collegefest'), ...pool('summit')]
-  const found = pick([
-    ['wedding', 1],
-    ['wedding', 4],
-    ['party', 5],
-    ['wedding', 10],
-    ['party', 8],
-    ['wedding', 13],
-  ])
   return (
-    <section className="bg-canvas py-24 sm:py-32">
-      <div className="container-page">
-        <SectionHeading eyebrow="The old way vs. Genesis Hub" title="Stop scrolling through thousands of photos." />
-        <div className="mt-14 grid gap-6 lg:grid-cols-2">
-          <Reveal>
-            <div className="relative h-full overflow-hidden rounded-3xl border border-navy-100 bg-white p-6 sm:p-8">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-navy-100 px-3 py-1 text-[13px] font-medium text-navy-600">Before</span>
-                <span className="text-sm text-navy-400 tabular-nums">Photo 1,284 of 2,000</span>
+    <section className="relative overflow-hidden bg-canvas py-24 sm:py-32">
+      <GridBackdrop />
+      <div className="container-page relative">
+        <SplitHeading
+          eyebrow="The difference"
+          title={
+            <>
+              Stop scrolling through <Accent>thousands of photos.</Accent>
+            </>
+          }
+        >
+          Drag the slider. On the left, the shared folder everyone digs through. On the right, only the photos a guest actually wants.
+        </SplitHeading>
+        <Reveal className="mt-12 sm:mt-14">
+          <CompareSlider />
+        </Reveal>
+        <Reveal className="mt-6">
+          <dl className="grid divide-y divide-navy-200/70 overflow-hidden rounded-3xl bg-white/70 ring-1 ring-navy-200/70 backdrop-blur sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            {DIFFERENCE.map(([n, label], i) => (
+              <div key={label} className="flex items-baseline gap-4 px-6 py-5 sm:block sm:px-8 sm:py-7">
+                <dt className={cn('font-display text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl', i === 1 ? 'text-brand-600' : 'text-navy-950')}>{n}</dt>
+                <dd className="text-[15px] text-navy-500 sm:mt-2">{label}</dd>
               </div>
-              <h3 className="mt-5 text-2xl font-semibold text-navy-950">Hours of scrolling</h3>
-              <p className="mt-2 text-navy-500">A shared drive with 2,000 photos. You zoom into every group shot, hoping to spot yourself.</p>
-              <div className="relative mt-6 grid grid-cols-8 gap-1 opacity-70 grayscale-[35%]" aria-hidden>
-                {Array.from({ length: 48 }, (_, i) => all[(i * 7) % all.length]).map((p, i) => (
-                  <img key={i} src={p.src} alt="" loading="lazy" className="aspect-square w-full rounded-[4px] object-cover" />
-                ))}
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/30 to-white" />
-              </div>
-            </div>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <div className="relative h-full overflow-hidden rounded-3xl bg-navy-950 p-6 text-white sm:p-8">
-              <GridBackdrop dark />
-              <div className="relative flex items-center justify-between">
-                <span className="rounded-full bg-cyan-400/15 px-3 py-1 text-[13px] font-medium text-cyan-300 ring-1 ring-cyan-300/30">With Genesis Hub</span>
-                <span className="text-sm text-navy-300 tabular-nums">2.8 seconds</span>
-              </div>
-              <h3 className="relative mt-5 text-2xl font-semibold">47 photos, found for you</h3>
-              <p className="relative mt-2 text-navy-300">One selfie. Genesis Hub checks every face in every photo and brings back only the ones you’re in.</p>
-              <div className="relative mt-6 grid grid-cols-3 gap-2">
-                {found.map((p, i) => (
-                  <motion.div
-                    key={p.id}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.15 + i * 0.07 }}
-                  >
-                    <Photo photo={p} className="aspect-[4/3] rounded-xl ring-1 ring-white/10" />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </Reveal>
-        </div>
+            ))}
+          </dl>
+        </Reveal>
       </div>
     </section>
   )
 }
 
-// ---------------------------------------------------------------- occasions
-
-function Occasions() {
-  const cards = [
-    { label: 'Weddings', text: 'Every guest, every ritual, every dance.', photo: pool('wedding')[6], span: 'md:col-span-2 md:row-span-2' },
-    { label: 'Conferences', text: 'Speakers and attendees find their stage moments.', photo: pool('summit')[4] },
-    { label: 'College events', text: 'Fests, convocations and hackathons.', photo: pool('collegefest')[14] },
-    { label: 'Corporate events', text: 'Offsites, awards and team dinners.', photo: pool('corporate')[5] },
-    { label: 'Parties', text: 'Birthdays, rooftops and celebrations.', photo: pool('party')[4] },
-    { label: 'Festivals', text: 'Find yourself in a crowd of 12,000.', photo: pool('music')[1] },
-    { label: 'Sports', text: 'Players, fans and every goal.', photo: pool('sports')[1] },
-    { label: 'Photography studios', text: 'Deliver galleries clients actually use.', photo: pool('startup')[3], span: 'col-span-2' },
-  ]
-  return (
-    <section className="bg-white py-24 sm:py-32">
-      <div className="container-page">
-        <SectionHeading eyebrow="Event types" title="Made for every occasion." />
-        <div className="mt-14 grid auto-rows-[190px] grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
-          {cards.map((c, i) => (
-            <Reveal key={c.label} delay={(i % 4) * 0.05} className={cn('group relative overflow-hidden rounded-2xl sm:rounded-3xl', c.span, i === 0 && 'col-span-2 row-span-2')}>
-              <Photo photo={c.photo} className="absolute inset-0" imgClassName="transition-transform duration-700 group-hover:scale-[1.04]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-navy-950/85 via-navy-950/15 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
-                <h3 className={cn('font-semibold text-white', i === 0 ? 'text-2xl' : 'text-lg')}>{c.label}</h3>
-                <p className="mt-0.5 text-[13px] text-white/75 max-sm:hidden">{c.text}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ----------------------------------------------------------------- features
-
-const FEATURES = [
-  { icon: ScanFace, title: 'AI face search', text: 'State-of-the-art face recognition (SCRFD detection + AdaFace) checks every face, even in the back row.' },
-  { icon: Zap, title: 'Results in seconds', text: 'Thousands of photos compared faster than you can open the first album.' },
-  { icon: ShieldCheck, title: 'Private by design', text: 'Search happens inside one event. Your selfie is used for your search, not for anything else.' },
-  { icon: Smartphone, title: 'Works on mobile', text: 'Built phone-first. Front or back camera, or upload a photo you already have.' },
-  { icon: Download, title: 'Download your memories', text: 'Full-quality originals, one at a time or all at once.' },
-  { icon: Search, title: 'No manual searching', text: 'No hashtags, no bib numbers, no folders to dig through.' },
-]
+// ---------------------------------------------------------------- features
 
 function Features() {
   return (
-    <section id="features" className="scroll-mt-16 bg-canvas py-24 sm:py-32">
+    <section id="features" className="scroll-mt-16 bg-white py-24 sm:py-32">
       <div className="container-page">
-        <SectionHeading eyebrow="Features" title="Everything guests need. Nothing they don’t." />
-        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map(({ icon: Icon, title, text }, i) => (
-            <Reveal key={title} delay={(i % 3) * 0.06}>
-              <div className="group h-full rounded-2xl border border-navy-100 bg-white p-6 transition-shadow duration-300 hover:shadow-lift">
-                <span className="grid size-11 place-items-center rounded-xl bg-navy-950 text-cyan-300 transition-transform duration-300 group-hover:-rotate-6">
-                  <Icon className="size-5" />
-                </span>
-                <h3 className="mt-5 text-lg font-semibold text-navy-950">{title}</h3>
-                <p className="mt-1.5 leading-relaxed text-navy-500">{text}</p>
-              </div>
-            </Reveal>
-          ))}
+        <SplitHeading
+          eyebrow="Features"
+          title={
+            <>
+              Everything guests need. <Accent>Nothing they don’t.</Accent>
+            </>
+          }
+        >
+          Built around one moment: a guest holding up their phone and seeing themselves, in seconds.
+        </SplitHeading>
+        <div className="mt-14">
+          <FeatureBento />
         </div>
       </div>
     </section>
   )
 }
 
-// ----------------------------------------------------------- product preview
+// -------------------------------------------------------------- organizers
 
-function ProductPreview() {
-  const results = pool('wedding')
-  const matched = [1, 4, 6, 9, 10, 13, 15, 17].map((i) => results[i]).filter(Boolean)
+function Organizers() {
   return (
-    <section className="relative overflow-hidden bg-navy-950 py-24 sm:py-32">
-      <Spotlight className="-top-60 left-1/2 md:-top-40" fill="#05b0f6" />
+    <section id="organizers" className="relative scroll-mt-16 overflow-hidden bg-navy-950 py-24 sm:py-32">
+      <GridBackdrop dark />
+      <div aria-hidden className="absolute -top-40 -right-40 size-[640px] rounded-full bg-brand-600/20 blur-[140px]" />
+      <div aria-hidden className="absolute -bottom-60 -left-40 size-[520px] rounded-full bg-cyan-500/10 blur-[140px]" />
       <div className="container-page relative">
-        <SectionHeading dark eyebrow="The moment" title="“We found 38 moments for you.”">
-          The best part of any event, delivered to every guest. Big, beautiful photos with no clutter.
-        </SectionHeading>
-        <Reveal className="relative mx-auto mt-14 max-w-5xl">
-          <div className="overflow-hidden rounded-2xl bg-white shadow-pop ring-1 ring-white/10">
-            <div className="flex items-center gap-2 border-b border-navy-100 bg-navy-50 px-4 py-3">
-              <span className="flex gap-1.5">
-                {['#ff5f57', '#febc2e', '#28c840'].map((c) => (
-                  <span key={c} className="size-3 rounded-full" style={{ background: c }} />
-                ))}
-              </span>
-              <span className="mx-auto rounded-md bg-white px-3 py-1 text-xs text-navy-500 ring-1 ring-navy-100">genesishub.app/e/sarah-arjun-wedding</span>
-            </div>
-            <div className="p-5 sm:p-8">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-brand-600">Sarah &amp; Arjun Wedding</p>
-                  <h3 className="mt-1 text-2xl font-semibold text-navy-950 sm:text-3xl">We found 38 moments for you.</h3>
-                </div>
-                <span className="flex gap-2 max-sm:hidden">
-                  <span className="rounded-lg bg-navy-100 px-3 py-2 text-[13px] font-medium text-navy-700">Favorite all</span>
-                  <span className="rounded-lg bg-brand-600 px-3 py-2 text-[13px] font-medium text-white">Download all</span>
+        <OrganizerSection>
+          <SectionHeading dark center={false} eyebrow="For organizers & photographers" title="Deliver photos guests" accent="actually find.">
+            Turn a folder of thousands of photos into a personal gallery for every guest, and see exactly who came looking.
+          </SectionHeading>
+          <Reveal className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-4">
+            <Link to="/login" className="group inline-flex h-12 items-center gap-2 rounded-xl bg-white px-5 text-[15px] font-semibold text-navy-950 transition-colors hover:bg-cyan-50">
+              Organizer login <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+            <span className="text-sm text-navy-400">Accounts are created by your Super Admin.</span>
+          </Reveal>
+        </OrganizerSection>
+      </div>
+    </section>
+  )
+}
+
+// --------------------------------------------------------------- occasions
+
+const OCCASION_ROWS = [
+  [
+    ['8vmvtj_W4xQ', 'Weddings', 'Every guest, every ritual.'],
+    ['3EMw3T-ZjkE', 'Convocations', 'Caps in the air, found.'],
+    ['CnAgA4rmGUQ', 'Conferences', 'Speakers and every attendee.'],
+    ['_HzlOHmboSk', 'College fests', 'The whole crowd, not just the stage.'],
+    ['nPz8akkUmDI', 'Concerts', 'Find yourself in the crowd.'],
+  ],
+  [
+    ['LO1lToLGGFA', 'Birthdays', 'Every candid from the night.'],
+    ['WJPHTJEtgzw', 'Corporate', 'Offsites, awards and team days.'],
+    ['GLKM5guF69Y', 'Sports', 'Players, fans and every goal.'],
+    ['Y8XxrkzwdyI', 'Parties', 'Rooftops and dance floors.'],
+    ['wmhehhmeA1o', 'Hackathons', 'Three days, one gallery.'],
+  ],
+]
+
+function OccasionCard({ p, title, text, wide }) {
+  return (
+    <figure className={cn('group relative shrink-0 overflow-hidden rounded-[28px] bg-navy-100', wide ? 'aspect-[4/3] w-[300px] sm:w-[380px]' : 'aspect-[3/4] w-[220px] sm:w-[270px]')}>
+      <Photo photo={p} className="absolute inset-0" imgClassName="transition-transform duration-700 ease-out group-hover:scale-[1.06]" />
+      <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy-950/90 via-navy-950/35 to-transparent p-5 pt-16 sm:p-6 sm:pt-20">
+        <p className="font-serif text-3xl leading-none text-white italic">{title}</p>
+        <p className="mt-2 text-sm text-white/75">{text}</p>
+      </figcaption>
+    </figure>
+  )
+}
+
+function Occasions() {
+  return (
+    <section className="overflow-hidden bg-white py-24 sm:py-32">
+      <div className="container-page">
+        <SplitHeading
+          eyebrow="Event types"
+          title={
+            <>
+              Made for every <Accent>occasion.</Accent>
+            </>
+          }
+        >
+          Wherever there’s a photographer, there’s a guest who wants to find themselves afterwards.
+        </SplitHeading>
+      </div>
+      <Reveal className="mt-14 grid gap-5">
+        {OCCASION_ROWS.map((row, r) => {
+          const photos = byIds(row.map((o) => o[0])).map(thumb)
+          return (
+            <Marquee key={r} duration={r ? 64 : 56} gap="1.25rem" reverse={r === 1}>
+              {photos.map((p, i) => (
+                <OccasionCard key={p.id} p={p} title={row[i][1]} text={row[i][2]} wide={r === 1} />
+              ))}
+            </Marquee>
+          )
+        })}
+      </Reveal>
+    </section>
+  )
+}
+
+// ------------------------------------------------------------------ privacy
+
+const PRIVACY = [
+  [Lock, 'Your selfie is never stored', 'It becomes a face signature for one search, then it’s thrown away. Never added to a gallery, never shown to anyone.'],
+  [EyeOff, 'You only see your own photos', 'Results open with a private key made for your search. Nobody can browse an event’s gallery.'],
+  [ScanFace, 'One event at a time', 'A search looks inside the event you picked, and nowhere else.'],
+  [UserRound, 'Organizers see your name, not your face', 'Your name and email tell the organizer who searched. Your selfie never reaches them.'],
+]
+
+function Privacy() {
+  return (
+    <section id="privacy" className="scroll-mt-16 bg-canvas py-24 sm:py-32">
+      <div className="container-page">
+        {/* Aceternity "moving border": a light that travels round the card */}
+        <Reveal>
+          <div
+            className="relative animate-border-spin overflow-hidden rounded-[36px] border border-transparent"
+            style={{
+              background:
+                'linear-gradient(#020e39, #020e39) padding-box, conic-gradient(from var(--border-angle), rgb(114 209 251 / 0.08) 0%, rgb(114 209 251 / 0.08) 70%, #72d1fb 85%, rgb(114 209 251 / 0.08) 100%) border-box',
+            }}
+          >
+            <div aria-hidden className="absolute -top-40 -left-24 size-[520px] rounded-full bg-brand-600/25 blur-[120px]" />
+            <GridBackdrop dark />
+            <div className="relative grid gap-12 p-7 sm:p-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:p-16">
+              <div className="lg:py-4">
+                <span className="grid size-14 place-items-center rounded-2xl bg-cyan-300 text-navy-950 shadow-[0_0_40px_rgb(5_176_246/0.5)]">
+                  <ShieldCheck className="size-7" />
                 </span>
+                <h2 className="mt-7 text-[34px] leading-[1.04] font-semibold tracking-[-0.03em] text-white sm:text-5xl">
+                  Face search, <Accent dark>handled with care.</Accent>
+                </h2>
+                <p className="mt-5 max-w-md text-lg leading-relaxed text-navy-300">
+                  Face data is biometric data, and we treat it that way. Every guest agrees in plain language before their first search.
+                </p>
+                <div className="mt-8 flex flex-wrap gap-3 text-sm font-semibold">
+                  <Link to="/privacy" className="rounded-full bg-white/10 px-4 py-2 text-white ring-1 ring-white/15 transition-colors hover:bg-white/15">
+                    Privacy Policy →
+                  </Link>
+                  <Link to="/consent" className="rounded-full bg-white/10 px-4 py-2 text-white ring-1 ring-white/15 transition-colors hover:bg-white/15">
+                    Biometric consent →
+                  </Link>
+                </div>
               </div>
-              <div className="mt-6 columns-2 gap-3 sm:columns-4 [&>*]:mb-3">
-                {matched.map((p) => (
-                  <div key={p.id} className="break-inside-avoid overflow-hidden rounded-xl">
-                    <Photo photo={p} ratio="natural" />
-                  </div>
+              <ul className="grid gap-4 sm:grid-cols-2">
+                {PRIVACY.map(([Icon, t, d], i) => (
+                  <motion.li
+                    key={t}
+                    initial={{ opacity: 0, y: 14 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.1 + i * 0.08 }}
+                    className="rounded-3xl bg-white/[0.04] p-6 ring-1 ring-white/10 transition-colors hover:bg-white/[0.07]"
+                  >
+                    <span className="grid size-10 place-items-center rounded-xl bg-white/10 text-cyan-300">
+                      <Icon className="size-5" />
+                    </span>
+                    <h3 className="mt-5 font-semibold text-white">{t}</h3>
+                    <p className="mt-2 text-[15px] leading-relaxed text-navy-300">{d}</p>
+                  </motion.li>
                 ))}
-              </div>
-            </div>
-          </div>
-          {/* phone */}
-          <div className="absolute -right-2 -bottom-10 hidden w-[200px] rounded-[32px] bg-navy-900 p-2 shadow-pop ring-1 ring-white/15 md:block lg:-right-10">
-            <div className="overflow-hidden rounded-[26px] bg-white">
-              <div className="p-3">
-                <p className="text-[10px] font-medium text-brand-600">Your moments</p>
-                <p className="text-[13px] font-semibold text-navy-950">38 photos found</p>
-              </div>
-              <div className="grid grid-cols-2 gap-1 px-1 pb-1">
-                {matched.slice(0, 6).map((p) => (
-                  <Photo key={p.id} photo={p} className="aspect-square rounded-md" />
-                ))}
-              </div>
+              </ul>
             </div>
           </div>
         </Reveal>
@@ -430,124 +408,75 @@ function ProductPreview() {
   )
 }
 
-// ---------------------------------------------------------------- organizers
-
-function Organizers() {
-  const steps = [
-    { icon: Sparkles, title: 'Create your event', text: 'Name, date, venue and cover. Your event gets its own private gallery.' },
-    { icon: UserPlus, title: 'Invite your team', text: 'Give photographers event-level access: they only see the events you assign.' },
-    { icon: CloudUpload, title: 'Upload the photos', text: 'Drag in thousands of photos. Every face is detected and indexed automatically.' },
-    { icon: Link2, title: 'Share one link', text: 'Guests open the link, take a selfie and find themselves. No more “can you send me that one?”' },
-  ]
-  return (
-    <section id="organizers" className="scroll-mt-16 bg-white py-24 sm:py-32">
-      <div className="container-page grid gap-14 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-        <div>
-          <SectionHeading center={false} eyebrow="For organizers & photographers" title="Deliver photos guests actually find.">
-            Genesis Hub turns a folder of thousands of photos into a personal gallery for every guest, with the controls
-            organizers and studios need.
-          </SectionHeading>
-          <Reveal className="mt-8 flex flex-wrap gap-3">
-            <Button to="/login" size="lg">
-              Admin login <ArrowRight />
-            </Button>
-          </Reveal>
-        </div>
-        <ol className="relative grid gap-4">
-          <span aria-hidden className="absolute top-8 bottom-8 left-[27px] w-px bg-gradient-to-b from-brand-200 via-brand-400 to-cyan-300" />
-          {steps.map(({ icon: Icon, title, text }, i) => (
-            <Reveal key={title} delay={i * 0.07}>
-              <li className="relative flex gap-5 rounded-2xl border border-navy-100 bg-white p-5 shadow-card">
-                <span className="relative z-10 grid size-14 shrink-0 place-items-center rounded-2xl bg-navy-950 text-cyan-300">
-                  <Icon className="size-6" />
-                </span>
-                <div>
-                  <h3 className="font-semibold text-navy-950">
-                    <span className="mr-2 font-mono text-sm text-brand-600">0{i + 1}</span>
-                    {title}
-                  </h3>
-                  <p className="mt-1 text-[15px] leading-relaxed text-navy-500">{text}</p>
-                </div>
-              </li>
-            </Reveal>
-          ))}
-        </ol>
-      </div>
-    </section>
-  )
-}
-
-// ------------------------------------------------------------------ privacy
-
-function Privacy() {
-  const points = [
-    ['Search stays inside one event', 'A selfie searches only the event you choose. Photos from other events are never shown.'],
-    ['Your selfie is used for your search', 'It’s turned into a face signature to find your photos. It isn’t added to any gallery.'],
-    ['Organizers control access', 'Only invited guests and assigned admins can open an event.'],
-    ['You stay in control', 'Remove your account and search history at any time from your profile.'],
-  ]
-  return (
-    <section id="privacy" className="scroll-mt-16 bg-canvas py-24 sm:py-32">
-      <div className="container-page grid gap-12 lg:grid-cols-[0.9fr_1.1fr]">
-        <div>
-          <span className="grid size-14 place-items-center rounded-2xl bg-white text-brand-600 shadow-lift ring-1 ring-navy-100">
-            <Lock className="size-6" />
-          </span>
-          <SectionHeading center={false} eyebrow="Privacy" title="Face search, handled with care.">
-            Face data is biometric data. We treat it that way, with plain-language consent before every first search.
-          </SectionHeading>
-          <Reveal className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm font-medium">
-            <Link to="/privacy" className="text-brand-700 hover:underline">
-              Privacy Policy →
-            </Link>
-            <Link to="/consent" className="text-brand-700 hover:underline">
-              Biometric consent →
-            </Link>
-          </Reveal>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {points.map(([t, d], i) => (
-            <Reveal key={t} delay={i * 0.06}>
-              <div className="h-full rounded-2xl border border-navy-100 bg-white p-6">
-                <ShieldCheck className="size-5 text-brand-600" />
-                <h3 className="mt-4 font-semibold text-navy-950">{t}</h3>
-                <p className="mt-1.5 text-[15px] leading-relaxed text-navy-500">{d}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 // ---------------------------------------------------------------------- FAQ
 
 const FAQS = [
-  ['Do I need to install an app?', 'No. Genesis Hub runs in your phone’s browser. Open the event link, take a selfie, and you’re done.'],
-  ['What if the camera doesn’t work?', 'You can upload any clear photo of yourself instead. A front-facing photo in good light works best.'],
-  ['How accurate is it?', 'Very accurate for clear faces. Very small, blurry or turned-away faces are skipped rather than guessed, so you won’t get strangers in your results.'],
-  ['Can other guests see my photos?', 'Guests only see the photos their own face matches. Event galleries are only visible to invited guests and the event’s admins.'],
-  ['Is my selfie stored?', 'Your selfie is used to run your search in the event you picked. It is not added to the event gallery or shared with other guests.'],
-  ['How do organizers get started?', 'Create an event, assign your photographers, upload the photos, and share the link with guests.'],
+  ['Do I need an app or an account?', 'No. Genesis Hub runs in your phone’s browser. Open the event link, type your name and email, take a selfie, and you’re done.'],
+  ['Why do you ask for my name and email?', 'So the organizer knows who searched for photos. They see your name and email, never your selfie.'],
+  ['What if the camera doesn’t work?', 'Upload any clear photo of yourself instead. A front-facing photo in good light works best.'],
+  ['How accurate is it?', 'Very accurate for clear faces. Faces that are tiny, blurry or turned away are skipped rather than guessed, so strangers don’t end up in your results.'],
+  ['Can other guests see my photos?', 'No. Your results open only for your search. Nobody can browse an event’s whole gallery.'],
+  ['Is my selfie stored?', 'No. It’s used once to run your search, then discarded. It’s never added to the event’s gallery.'],
+  ['How do organizers get started?', 'Ask the Super Admin for an organizer login. Then create your events, upload the photos (a folder or a Google Drive link), and share the event link with guests.'],
 ]
 
-function FAQ() {
+function FaqItem({ q, a, open, onToggle, id }) {
+  return (
+    <li className="border-b border-navy-100">
+      <h3>
+        <button
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={id}
+          className="group flex w-full items-center justify-between gap-6 py-6 text-left text-lg font-medium text-navy-950 sm:text-xl"
+        >
+          {q}
+          <span className={cn('grid size-9 shrink-0 place-items-center rounded-full transition-colors duration-300', open ? 'bg-brand-600 text-white' : 'bg-navy-50 text-navy-500 group-hover:bg-navy-100')}>
+            <Plus className={cn('size-4 transition-transform duration-300', open && 'rotate-45')} />
+          </span>
+        </button>
+      </h3>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            id={id}
+            role="region"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.35, ease: EASE }}
+            className="overflow-hidden"
+          >
+            <p className="pr-14 pb-7 text-[17px] leading-relaxed text-navy-500">{a}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </li>
+  )
+}
+
+function FAQ({ primaryTo }) {
+  const [open, setOpen] = useState(0)
   return (
     <section id="faq" className="scroll-mt-16 bg-white py-24 sm:py-32">
-      <div className="container-page max-w-3xl">
-        <SectionHeading eyebrow="FAQ" title="Questions, answered." />
-        <div className="mt-12 divide-y divide-navy-100 border-y border-navy-100">
-          {FAQS.map(([q, a]) => (
-            <details key={q} className="group py-1">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-6 rounded-lg py-4 text-left text-[17px] font-medium text-navy-950 [&::-webkit-details-marker]:hidden">
-                {q}
-                <ChevronDown className="size-5 shrink-0 text-navy-400 transition-transform duration-200 group-open:rotate-180" />
-              </summary>
-              <p className="pb-5 leading-relaxed text-navy-500">{a}</p>
-            </details>
+      <div className="container-page grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+        <Reveal className="lg:sticky lg:top-28 lg:self-start">
+          <p className="inline-flex items-center gap-2 text-[13px] font-semibold tracking-[0.14em] text-brand-700 uppercase">
+            <span aria-hidden className="size-1.5 bg-brand-600" /> FAQ
+          </p>
+          <h2 className="mt-4 text-[34px] leading-[1.04] font-semibold tracking-[-0.03em] text-navy-950 sm:text-5xl">
+            Questions, <Accent>answered.</Accent>
+          </h2>
+          <p className="mt-5 max-w-sm text-lg leading-relaxed text-navy-500">Everything guests usually ask before their first search.</p>
+          <Link to={primaryTo} className="group mt-8 inline-flex items-center gap-2 font-semibold text-brand-700">
+            Try it on your event <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        </Reveal>
+        <ul className="border-t border-navy-100">
+          {FAQS.map(([q, a], i) => (
+            <FaqItem key={q} q={q} a={a} id={`faq-${i}`} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)} />
           ))}
-        </div>
+        </ul>
       </div>
     </section>
   )
@@ -555,29 +484,89 @@ function FAQ() {
 
 // ---------------------------------------------------------------------- CTA
 
+// Photos from the event float around the headline; the ones you're in wear
+// a face ring, like results do.
+const FLOATING = [
+  ['DVmEj6ptFbc', 'top-[9%] left-[5%] w-44 -rotate-6', true],
+  ['8vmvtj_W4xQ', 'top-[6%] right-[7%] w-48 rotate-[5deg]', false],
+  ['LO1lToLGGFA', 'bottom-[10%] left-[9%] w-36 rotate-[4deg]', true],
+  ['Y8XxrkzwdyI', 'bottom-[7%] right-[5%] w-52 -rotate-[4deg]', false],
+  ['zc6ezUR4-8I', 'top-[42%] left-[1%] w-36 -rotate-3 max-xl:hidden', false],
+  ['QbGPGsliC5w', 'top-[40%] right-[1%] w-36 rotate-6 max-xl:hidden', true],
+  ['3EMw3T-ZjkE', 'top-[3%] left-[33%] w-32 rotate-2 max-lg:hidden', false],
+  ['ee9plLQf41E', 'bottom-[3%] right-[31%] w-32 -rotate-2 max-lg:hidden', true],
+]
+
 function FinalCta({ primaryTo }) {
-  const strip = [...pool('wedding').slice(0, 5), ...pool('party').slice(4, 9), ...pool('collegefest').slice(10, 15)]
+  const photos = byIds(FLOATING.map((f) => f[0])).map(thumb)
   return (
-    <section className="bg-white px-4 pb-24 sm:px-6 lg:px-8">
-      <div className="relative mx-auto max-w-7xl overflow-hidden rounded-[32px] bg-navy-950 px-6 py-20 text-center sm:px-12 sm:py-24">
-        <div aria-hidden className="absolute inset-0 opacity-25">
-          <Marquee duration={70} gap="0.75rem" className="absolute top-6">
-            {strip.map((p) => (
-              <img key={p.id} src={p.src} alt="" loading="lazy" className="h-28 w-40 rounded-xl object-cover" />
-            ))}
-          </Marquee>
-        </div>
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-navy-950/30 via-navy-950/85 to-navy-950" />
-        <div className="relative">
-          <h2 className="mx-auto max-w-3xl text-3xl font-semibold text-white sm:text-5xl sm:leading-[1.08]">
-            Your next event has thousands of moments. <span className="text-gradient-brand">Let your guests find theirs.</span>
-          </h2>
-          <div className="mt-10 flex flex-wrap justify-center gap-3">
-            <Button to={primaryTo} size="xl" variant="light">
-              Get Started <ArrowRight />
-            </Button>
+    <section className="relative isolate overflow-hidden bg-navy-950 py-32 sm:py-44">
+      <GridBackdrop dark />
+      <div aria-hidden className="absolute top-1/2 left-1/2 -z-10 size-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-600/30 blur-[160px]" />
+      {photos.map((p, i) => {
+        const [, pos, matched] = FLOATING[i]
+        return (
+          <motion.div
+            key={p.id}
+            aria-hidden
+            className={cn('absolute max-md:hidden', pos)}
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: matched ? 1 : 0.45, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.1 + i * 0.07, duration: 0.8, ease: EASE }}
+          >
+            <motion.div animate={{ y: [0, i % 2 ? 10 : -10, 0] }} transition={{ duration: 6 + (i % 3), repeat: Infinity, ease: 'easeInOut' }}>
+              <Photo photo={p} ratio="natural" face={matched ? largestFace(p) : undefined} className="rounded-2xl shadow-pop ring-1 ring-white/15" />
+            </motion.div>
+          </motion.div>
+        )
+      })}
+      {/* phones: a small fan of photos above the headline instead */}
+      <div aria-hidden className="relative mx-auto mb-10 flex h-28 w-64 justify-center md:hidden">
+        {photos.slice(0, 3).map((p, i) => (
+          <div key={p.id} className="absolute w-28" style={{ transform: `translateX(${(i - 1) * 70}px) rotate(${(i - 1) * 8}deg)`, zIndex: i === 1 ? 2 : 1 }}>
+            <Photo photo={p} ratio="4 / 3" className="rounded-xl ring-2 ring-white/20" />
           </div>
-        </div>
+        ))}
+      </div>
+      <div className="container-page relative text-center">
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mx-auto inline-flex items-center gap-2 rounded-full bg-white/5 py-1.5 pr-4 pl-1.5 text-[13px] text-navy-200 ring-1 ring-white/10 backdrop-blur"
+        >
+          <span className="grid size-6 place-items-center rounded-full bg-cyan-300 text-navy-950">
+            <ScanFace className="size-3.5" />
+          </span>
+          One selfie. Every moment.
+        </motion.p>
+        <motion.h2
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.15, duration: 0.8, ease: EASE }}
+          className="mx-auto mt-7 max-w-3xl text-4xl leading-[1.02] font-semibold tracking-[-0.035em] text-white sm:text-6xl lg:text-[68px]"
+        >
+          Your next event has thousands of moments.{' '}
+          <span className="block">
+            <Accent dark>Let every guest find theirs.</Accent>
+          </span>
+        </motion.h2>
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4 }}
+          className="mt-11 flex flex-wrap items-center justify-center gap-x-6 gap-y-4"
+        >
+          <ShineButton to={primaryTo}>
+            <Camera /> Find my photos
+          </ShineButton>
+          <Link to="/login" className="text-[15px] font-medium text-white/75 hover:text-white">
+            Organizer login →
+          </Link>
+        </motion.div>
       </div>
     </section>
   )
@@ -586,19 +575,18 @@ function FinalCta({ primaryTo }) {
 export default function Landing() {
   useDocumentTitle()
   const { user } = useAuth()
-  const primaryTo = user ? ROLE_HOME[user.role] : '/signup'
+  const primaryTo = user ? ROLE_HOME[user.role] : '/events'
   return (
     <>
       <Hero primaryTo={primaryTo} />
-      <TrustStrip />
+      <OccasionRibbon />
       <HowItWorks />
       <BeforeAfter />
-      <Occasions />
-      <Features />
-      <ProductPreview />
+      {/* <Features /> */}
       <Organizers />
+      <Occasions />
       <Privacy />
-      <FAQ />
+      <FAQ primaryTo={primaryTo} />
       <FinalCta primaryTo={primaryTo} />
     </>
   )

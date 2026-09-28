@@ -165,7 +165,35 @@ namespace genisis_Hub.Models.Responses
         public DateTime StartedAt           { get; set; }
         public DateTime? CompletedAt        { get; set; }
         public string?  ErrorMessage        { get; set; }
+        /// <summary>SearchPass key: lets this visitor (even without an account) open the matched photos.</summary>
+        public string?  AccessKey           { get; set; }
         public List<MatchResponse> Matches  { get; set; } = new();
+
+        /// <summary>Sets AccessKey and appends ?key= to every photo URL.</summary>
+        public SearchResponse WithAccessKey(string key)
+        {
+            AccessKey = key;
+            var q = "?key=" + Uri.EscapeDataString(key);
+            foreach (var m in Matches)
+            {
+                m.ImageUrl += q;
+                m.ThumbnailUrl += q;
+                m.DownloadUrl += q;
+            }
+            return this;
+        }
+    }
+
+    /// <summary>One person (by email) who searched, with their totals.</summary>
+    public class VisitorResponse
+    {
+        public string   Name        { get; set; } = string.Empty;
+        public string   Email       { get; set; } = string.Empty;
+        public int      Searches    { get; set; }
+        public int      PhotosFound { get; set; }
+        public string?  Events      { get; set; }
+        public DateTime FirstSeen   { get; set; }
+        public DateTime LastSeen    { get; set; }
     }
 
     public class MatchResponse

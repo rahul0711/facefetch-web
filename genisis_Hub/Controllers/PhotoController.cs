@@ -39,12 +39,16 @@ namespace genisis_Hub.Controllers
             }));
         }
 
+        // Visitors without an account reach a photo through the SearchPass key of the
+        // search that found it (?key=, see SearchController) -- hence [AllowAnonymous] below.
+
         // GET api/photos/{photoId}  -- admins get face boxes too
         [HttpGet("{photoId:long}")]
-        public async Task<IActionResult> GetById(ulong photoId)
+        [AllowAnonymous]
+        public async Task<IActionResult> GetById(ulong photoId, [FromQuery] string? key = null)
         {
             var photo = await _photos.GetPhotoByIdAsync(photoId);
-            if (photo == null || !await _access.CanViewPhotoAsync(photo, User)) return NotFound(ApiResponse<object>.Fail("Photo not found"));
+            if (photo == null || !await _access.CanViewPhotoAsync(photo, User, key)) return NotFound(ApiResponse<object>.Fail("Photo not found"));
             var r = PhotoResponse.From(photo);
             if (await _access.CanAsync(photo.EventId, User, p => p.CanView))
                 r.Faces = (await _faces.GetFacesByPhotoAsync(photoId)).Select(f => FaceBoxResponse.From(f, photo.Width, photo.Height)).ToList();
@@ -67,15 +71,17 @@ namespace genisis_Hub.Controllers
         // GET api/photos/{photoId}/thumbnail  (small grid image)
         // For <img src>, the JWT can be passed as ?access_token=... (see Program.cs).
         [HttpGet("{photoId:long}/image")]
-        public Task<IActionResult> Image(ulong photoId) => ServeAsync(photoId, thumbnail: false);
+        [AllowAnonymous]
+        public Task<IActionResult> Image(ulong photoId, [FromQuery] string? key = null) => ServeAsync(photoId, key, thumbnail: false);
 
         [HttpGet("{photoId:long}/thumbnail")]
-        public Task<IActionResult> Thumbnail(ulong photoId) => ServeAsync(photoId, thumbnail: true);
+        [AllowAnonymous]
+        public Task<IActionResult> Thumbnail(ulong photoId, [FromQuery] string? key = null) => ServeAsync(photoId, key, thumbnail: true);
 
-        private async Task<IActionResult> ServeAsync(ulong photoId, bool thumbnail)
+        private async Task<IActionResult> ServeAsync(ulong photoId, string? key, bool thumbnail)
         {
             var photo = await _photos.GetPhotoByIdAsync(photoId);
-            if (photo == null || !await _access.CanViewPhotoAsync(photo, User)) return NotFound();
+            if (photo == null || !await _access.CanViewPhotoAsync(photo, User, key)) return NotFound();
             var path = thumbnail && _storage.Exists(photo.ThumbnailPath) ? photo.ThumbnailPath : photo.FilePath;
             if (!_storage.Exists(path)) return NotFound();
             Response.Headers.CacheControl = "private, max-age=86400";
@@ -84,30 +90,32 @@ namespace genisis_Hub.Controllers
 
         // GET api/photos/{photoId}/download
         [HttpGet("{photoId:long}/download")]
-        public async Task<IActionResult> Download(ulong photoId)
+        [AllowAnonymous]
+        public async Task<IActionResult> Download(ulong photoId, [FromQuery] string? key = null)
         {
             var photo = await _photos.GetPhotoByIdAsync(photoId);
-            if (photo == null || !await _access.CanViewPhotoAsync(photo, User) || !_storage.Exists(photo.FilePath))
+            if (photo == null || !await _access.CanViewPhotoAsync(photo, User, key) || !_storage.Exists(photo.FilePath))
                 return NotFound(ApiResponse<object>.Fail("Photo not found"));
-            await _downloads.LogDownloadsAsync(JwtHelper.GetUserId(User), new[] { photo }, "Single", HttpContext.ClientIp(), HttpContext.ClientAgent());
+            await _downloads.LogDownloadsAsync(UserIdOrNull(), new[] { photo }, "Single", HttpContext.ClientIp(), HttpContext.ClientAgent());
             var name = $"{Path.GetFileNameWithoutExtension(photo.OriginalFileName)}.jpg";
             return PhysicalFile(_storage.Resolve(photo.FilePath), "image/jpeg", name);
         }
 
-        // POST api/photos/download-zip   { "photoIds": [1,2,3] }
+        // POST api/photos/download-zip?key=   { "photoIds": [1,2,3] }
         [HttpPost("download-zip")]
-        public async Task<IActionResult> DownloadZip([FromBody] PhotoIdsRequest request)
+        [AllowAnonymous]
+        public async Task<IActionResult> DownloadZip([FromBody] PhotoIdsRequest request, [FromQuery] string? key = null)
         {
             if (!ModelState.IsValid || request.PhotoIds.Count == 0) return BadRequest(ApiResponse<object>.Fail("No photos specified"));
             if (request.PhotoIds.Count > MaxZipPhotos) return BadRequest(ApiResponse<object>.Fail($"At most {MaxZipPhotos} photos per zip"));
 
             var photos = new List<Models.Photo>();
             foreach (var p in await _photos.GetPhotosByIdsAsync(request.PhotoIds))
-                if (await _access.CanViewPhotoAsync(p, User)) photos.Add(p);
+                if (await _access.CanViewPhotoAsync(p, User, key)) photos.Add(p);
             if (photos.Count == 0) return NotFound(ApiResponse<object>.Fail("No photos found"));
 
             var zipPath = await _downloads.CreateZipFileAsync(photos);
-            await _downloads.LogDownloadsAsync(JwtHelper.GetUserId(User), photos, photos.Count == 1 ? "Single" : "Zip",
+            await _downloads.LogDownloadsAsync(UserIdOrNull(), photos, photos.Count == 1 ? "Single" : "Zip",
                 HttpContext.ClientIp(), HttpContext.ClientAgent());
             Response.RegisterForDispose(new TempFile(zipPath));
             return PhysicalFile(zipPath, "application/zip", $"genesis-hub-photos-{DateTime.Now:yyyyMMdd}.zip");
@@ -169,6 +177,9 @@ namespace genisis_Hub.Controllers
             await _log.LogAsync(JwtHelper.GetUserId(User), null, "PHOTOS_DELETED", $"{deleted} photo(s) deleted");
             return Ok(ApiResponse<object>.Ok(new { deleted, denied }, $"{deleted} photo(s) deleted"));
         }
+
+        /// <summary>The logged-in user's id, or null for a visitor without an account.</summary>
+        private ulong? UserIdOrNull() => JwtHelper.GetUserId(User) is var id && id != 0 ? id : null;
 
         /// <summary>Deletes the temporary zip once the response has been sent.</summary>
         private sealed class TempFile(string path) : IDisposable

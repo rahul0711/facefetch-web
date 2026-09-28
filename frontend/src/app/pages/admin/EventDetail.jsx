@@ -5,6 +5,7 @@ import { AssignAdminsDrawer } from '../../components/AssignAdmins'
 import { AreaChart, Panel, StatusStack } from '../../components/charts'
 import { EventCover, StatStrip } from '../../components/console'
 import Photo from '../../components/Photo'
+import VisitorsTable from '../../components/VisitorsTable'
 import Button from '../../components/ui/Button'
 import { Modal, useToast } from '../../components/ui/overlay'
 import { Avatar, Badge, EmptyState, Skeleton, StatusBadge } from '../../components/ui/primitives'
@@ -203,6 +204,10 @@ export default function AdminEventDetail() {
           </dl>
         </Panel>
       </div>
+
+      <Panel title="Visitors" description="Who searched this event: the name and email they gave before their selfie">
+        <VisitorsTable eventId={ev.eventId} />
+      </Panel>
 
       {ev.status !== 'Archived' && (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-navy-100 bg-white p-5">

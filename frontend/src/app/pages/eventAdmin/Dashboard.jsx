@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarRange, CloudUpload, Download, Images, ScanFace, ScanSearch, Users } from 'lucide-react'
+import { ArrowRight, CalendarRange, CloudUpload, Download, Images, Plus, ScanFace, ScanSearch, Users } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Link } from 'react-router'
 import { useAuth } from '../../auth/AuthContext'
@@ -82,6 +82,11 @@ export default function EADashboard() {
             ? `You manage ${events.length} event${events.length === 1 ? '' : 's'}. ${events.filter((e) => e.status === 'Active').length ? 'Guests are searching right now.' : ''}`
             : 'Loading your events…'
         }
+        actions={
+          <Button to="/event-admin/events/create">
+            <Plus /> Create event
+          </Button>
+        }
       />
 
       {overview && (
@@ -104,7 +109,7 @@ export default function EADashboard() {
 
       <section className="grid gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-navy-950">Assigned events</h2>
+          <h2 className="text-lg font-semibold text-navy-950">Your events</h2>
           <Link to="/event-admin/events" className="text-sm font-medium text-brand-700 hover:underline">
             View all
           </Link>
@@ -114,8 +119,13 @@ export default function EADashboard() {
         ) : events.length ? (
           events.map((ev, i) => <AssignedEventCard key={ev.id} ev={ev} stats={overview?.perEvent[ev.id]} i={i} />)
         ) : (
-          <EmptyState icon={CalendarRange} title="No events assigned yet" className="rounded-2xl border border-navy-100 bg-white">
-            When a Super Admin assigns you to an event, it’ll appear here with everything you need to upload and manage photos.
+          <EmptyState
+            icon={CalendarRange}
+            title="No events yet"
+            className="rounded-2xl border border-navy-100 bg-white"
+            action={<Button to="/event-admin/events/create"><Plus /> Create your first event</Button>}
+          >
+            Create an event, upload its photos, and share the link. Events a Super Admin assigns to you appear here too.
           </EmptyState>
         )}
       </section>

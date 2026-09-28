@@ -1,4 +1,4 @@
-import { CheckSquare, CircleAlert, CloudUpload, Images, LoaderCircle, RefreshCw, ScanFace, ScanSearch, Sparkles, Trash2, X } from 'lucide-react'
+import { CheckSquare, CircleAlert, CloudUpload, FolderUp, Images, LoaderCircle, RefreshCw, ScanFace, ScanSearch, Sparkles, Trash2, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { FaceBox } from '../../components/Photo'
@@ -8,11 +8,41 @@ import { Badge, Checkbox, EmptyState, Progress, Segmented, Skeleton } from '../.
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { cn, fileSize, num, timeAgo } from '../../lib/utils'
 import { eventStats } from '../../services/analyticsService'
-import { deletePhotos, getPhoto, listPhotos, reanalyze, reanalyzeFailed, uploadPhotos } from '../../services/photoService'
+import { deletePhotos, getPhoto, importFromDrive, listPhotos, reanalyze, reanalyzeFailed, uploadPhotos } from '../../services/photoService'
+import DriveIcon from '../../components/ui/DriveIcon'
+import DriveImportDialog from './DriveImport'
 import { EventAdminHeader, EventHeaderSkeleton, Locked, NotAssigned, useAdminEvent } from './shared'
 
 const PAGE = 48
 const STATUS_PARAM = { all: undefined, processed: 'Completed', analyzing: 'Processing', failed: 'Failed' }
+const IMAGE_EXT = /\.(jpe?g|png|webp)$/i
+
+// Files from a folder picker can arrive without a MIME type, so fall back to
+// the extension. Hidden files (.DS_Store, ._foo.jpg) are skipped.
+const isImage = (f) => !f.name.startsWith('.') && (f.type.startsWith('image/') || IMAGE_EXT.test(f.name))
+
+// Every file in a drop, walking into dropped folders (and their subfolders).
+// The entries must be taken synchronously, before the drop event ends.
+async function droppedFiles(dt) {
+  const entries = [...(dt.items || [])].map((it) => it.webkitGetAsEntry?.()).filter(Boolean)
+  if (!entries.length) return [...dt.files]
+  const out = []
+  const walk = async (entry) => {
+    if (entry.isFile) {
+      out.push(await new Promise((res, rej) => entry.file(res, rej)))
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader()
+      // readEntries returns at most ~100 entries per call
+      for (;;) {
+        const batch = await new Promise((res, rej) => reader.readEntries(res, rej))
+        if (!batch.length) break
+        for (const e of batch) await walk(e)
+      }
+    }
+  }
+  for (const e of entries) await walk(e)
+  return out
+}
 
 function StatusOverlay({ p, onRetry }) {
   if (p.status === 'uploading')
@@ -76,7 +106,9 @@ export default function Photos() {
   const [detail, setDetail] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [retrying, setRetrying] = useState(new Set())
+  const [driveOpen, setDriveOpen] = useState(false)
   const input = useRef(null)
+  const folderInput = useRef(null)
   const dragDepth = useRef(0)
 
   // Stored photos, with this session's still-running uploads in front.
@@ -98,26 +130,36 @@ export default function Photos() {
   const batchDone = inflight.filter((r) => r.status === 'processed' || r.status === 'failed' || r.status === 'rejected').length
   const rejected = inflight.filter((r) => r.status === 'rejected' || (r.status === 'failed' && !r.realId))
 
-  const onFiles = useCallback(
-    async (fileList) => {
-      if (!perms?.canUpload) return
-      const files = [...fileList].filter((f) => f.type.startsWith('image/'))
-      if (!files.length) {
-        toast('Those files aren’t photos', { tone: 'error', description: 'Upload JPG, PNG or WEBP images.' })
-        return
-      }
+  // Runs an upload or a Drive import through the progress panel, then sums it up.
+  const runBatch = useCallback(
+    async (start) => {
       setFilter('all')
       setLive({})
-      const res = await uploadPhotos(eventId, files, (rec) => setLive((l) => ({ ...l, [rec.id]: rec })))
+      const res = await start((rec) => setLive((l) => ({ ...l, [rec.id]: rec })))
       const ok = res.filter((r) => r.status === 'processed').length
       const bad = res.length - ok
       toast(`${ok} of ${res.length} photo${res.length === 1 ? '' : 's'} indexed`, {
         tone: bad ? 'info' : 'success',
-        description: bad ? `${bad} couldn’t be analyzed. See the list below.` : 'Faces are indexed and ready for guest search.',
+        description: bad ? `${bad} couldn’t be added. See the list below.` : 'Faces are indexed and ready for guest search.',
       })
     },
-    [eventId, perms, toast],
+    [toast],
   )
+
+  const onFiles = useCallback(
+    (fileList) => {
+      if (!perms?.canUpload) return
+      const files = [...fileList].filter(isImage).sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name))
+      if (!files.length) {
+        toast('Those files aren’t photos', { tone: 'error', description: 'Upload JPG, PNG or WEBP images.' })
+        return
+      }
+      runBatch((onUpdate) => uploadPhotos(eventId, files, onUpdate))
+    },
+    [eventId, perms, toast, runBatch],
+  )
+
+  const onDriveImport = useCallback((files) => runBatch((onUpdate) => importFromDrive(eventId, files, onUpdate)), [eventId, runBatch])
 
   const retry = async (list) => {
     setRetrying((s) => new Set([...s, ...list.map((p) => p.id)]))
@@ -189,10 +231,12 @@ export default function Photos() {
         e.preventDefault()
         dragDepth.current = 0
         setDrag(false)
-        onFiles(e.dataTransfer.files)
+        if (!perms.canUpload) return
+        droppedFiles(e.dataTransfer).then(onFiles, () => onFiles(e.dataTransfer.files))
       }}
     >
       <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => (onFiles(e.target.files), (e.target.value = ''))} />
+      <input ref={folderInput} type="file" webkitdirectory="" directory="" multiple hidden onChange={(e) => (onFiles(e.target.files), (e.target.value = ''))} />
       <EventAdminHeader
         ev={ev}
         perms={perms}
@@ -205,6 +249,12 @@ export default function Photos() {
             )}
             <Button onClick={() => input.current.click()} disabled={!perms.canUpload} title={perms.canUpload ? undefined : 'You don’t have upload access'}>
               <CloudUpload /> Upload photos
+            </Button>
+            <Button variant="secondary" onClick={() => folderInput.current.click()} disabled={!perms.canUpload} title={perms.canUpload ? 'Upload every photo in a folder, including subfolders' : 'You don’t have upload access'}>
+              <FolderUp /> Upload folder
+            </Button>
+            <Button variant="secondary" onClick={() => setDriveOpen(true)} disabled={!perms.canUpload || batchActive} title={perms.canUpload ? 'Import a shared Google Drive folder' : 'You don’t have upload access'}>
+              <DriveIcon /> Google Drive
             </Button>
           </>
         }
@@ -278,10 +328,10 @@ export default function Photos() {
           </span>
           <span>
             <span className="block font-semibold text-navy-900">
-              <span className="[@media(pointer:coarse)]:hidden">Drag photos anywhere on this page, or click to browse</span>
+              <span className="[@media(pointer:coarse)]:hidden">Drag photos or a whole folder anywhere on this page, or click to browse</span>
               <span className="hidden [@media(pointer:coarse)]:inline">Tap to choose photos from your device</span>
             </span>
-            <span className="block text-[13px] text-navy-500">JPG, PNG or WEBP · every face is detected and indexed automatically</span>
+            <span className="block text-[13px] text-navy-500">JPG, PNG or WEBP · every face is detected and indexed automatically · photos on Google Drive? Use the Google Drive button</span>
           </span>
         </button>
       )}
@@ -432,6 +482,8 @@ export default function Photos() {
           </div>
         )}
       </Modal>
+
+      <DriveImportDialog eventId={eventId} open={driveOpen} onClose={() => setDriveOpen(false)} onImport={onDriveImport} />
 
       <Modal
         open={confirmDelete}

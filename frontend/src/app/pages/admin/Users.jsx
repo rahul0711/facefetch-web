@@ -73,11 +73,10 @@ export function CreateUserModal({ open, onClose, onCreated, role: fixedRole }) {
     >
       <form id="create-user-form" onSubmit={submit} className="grid gap-4" noValidate>
         {!fixedRole && (
-          <Field label="Role" htmlFor="cu-role" hint={role === 'super_admin' ? 'Full control of every event, user and setting.' : role === 'event_admin' ? 'Uploads and manages photos for assigned events.' : 'Searches events for their own photos.'}>
+          <Field label="Role" htmlFor="cu-role" hint={role === 'super_admin' ? 'Full control of every event, user and setting.' : 'Creates events and uploads and manages their photos.'}>
             <Select id="cu-role" value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="event_admin">Event Admin</option>
               <option value="super_admin">Super Admin</option>
-              <option value="end_user">Guest</option>
             </Select>
           </Field>
         )}
@@ -116,7 +115,7 @@ export function CreateUserModal({ open, onClose, onCreated, role: fixedRole }) {
 
 export default function AdminUsers({ tab }) {
   const admins = tab === 'admins'
-  useDocumentTitle(admins ? 'Event admins' : 'Users')
+  useDocumentTitle(admins ? 'Event admins' : 'Accounts')
   const navigate = useNavigate()
   const toast = useToast()
   const { data: users, loading } = useQuery(() => (admins ? listEventAdmins() : listUsers()), [admins])
@@ -137,11 +136,11 @@ export default function AdminUsers({ tab }) {
   return (
     <div className="grid gap-6">
       <PageHeader
-        title={admins ? 'Event admins' : 'Users'}
-        description={admins ? 'Photographers and organizers who manage individual events.' : 'Everyone with a Genesis Hub account.'}
+        title={admins ? 'Event admins' : 'Accounts'}
+        description={admins ? 'Photographers and organizers who create and manage events.' : 'Admin accounts. Guests don’t need one: see Visitors for who searched.'}
         actions={
           <Button onClick={() => setCreating(true)}>
-            <UserPlus /> {admins ? 'Add event admin' : 'Add user'}
+            <UserPlus /> {admins ? 'Add event admin' : 'Add account'}
           </Button>
         }
       />
@@ -152,14 +151,13 @@ export default function AdminUsers({ tab }) {
           value={tab}
           onChange={(v) => navigate(v === 'admins' ? '/admin/admins' : '/admin/users')}
           options={[
-            { value: 'guests', label: 'All users' },
+            { value: 'guests', label: 'All accounts' },
             { value: 'admins', label: 'Event admins' },
           ]}
         />
         {!admins && (
           <Select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Filter by role" className="h-10 w-40">
             <option value="all">All roles</option>
-            <option value="end_user">Guests</option>
             <option value="event_admin">Event Admins</option>
             <option value="super_admin">Super Admins</option>
           </Select>
@@ -179,10 +177,10 @@ export default function AdminUsers({ tab }) {
         ) : !shown.length ? (
           <EmptyState
             icon={UsersIcon}
-            title={q ? 'No one matches' : admins ? 'No event admins yet' : 'No users yet'}
-            action={!q && <Button onClick={() => setCreating(true)}><UserPlus /> {admins ? 'Add event admin' : 'Add user'}</Button>}
+            title={q ? 'No one matches' : admins ? 'No event admins yet' : 'No accounts yet'}
+            action={!q && <Button onClick={() => setCreating(true)}><UserPlus /> {admins ? 'Add event admin' : 'Add account'}</Button>}
           >
-            {q ? 'Try a different name or email.' : admins ? 'Create an event admin, then assign them to events.' : 'Guests appear here once they sign up.'}
+            {q ? 'Try a different name or email.' : admins ? 'Create an event admin. They can create their own events or be assigned to yours.' : 'Create an admin account to get started.'}
           </EmptyState>
         ) : (
           <table className="w-full text-left text-sm">

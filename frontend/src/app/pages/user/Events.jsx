@@ -76,7 +76,7 @@ function EventCard({ ev, prev, i }) {
 }
 
 export default function Events() {
-  useDocumentTitle('Your events')
+  useDocumentTitle('Events')
   const { user } = useAuth()
   const { data: events, loading } = useQuery(() => listGuestEvents(), [])
   // latest successful search per event -> "N moments found"
@@ -93,7 +93,7 @@ export default function Events() {
     <div className="container-page py-10 sm:py-14">
       <header className="max-w-2xl">
         <p className="text-sm font-medium text-brand-700">
-          {greeting()}, {firstName(user.name)}
+          {user ? `${greeting()}, ${firstName(user.name)}` : greeting()}
         </p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight text-navy-950 sm:text-5xl">Find your moments.</h1>
         <p className="mt-3 text-lg text-navy-500">Choose an event and we’ll find every photo you’re in.</p>

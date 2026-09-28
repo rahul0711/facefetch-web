@@ -126,7 +126,7 @@ export default function LabApp() {
         <nav className="ff-nav__links">
           <a href="/">← Genesis Hub home</a>
           <a href="#how">How it works</a>
-          <a href="#features">Features</a>
+          {/* <a href="#features">Features</a> */}
           <a href="#faq">FAQ</a>
         </nav>
         <a className="ff-btn ff-btn--primary ff-btn--sm" href="#find">

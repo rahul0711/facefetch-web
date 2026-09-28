@@ -10,7 +10,6 @@ import { ROLE_HOME } from './services/authService'
 
 // Route-level code splitting: a guest never downloads the admin consoles.
 const Login = lazy(() => import('./pages/auth/Login'))
-const Signup = lazy(() => import('./pages/auth/Signup'))
 const Legal = lazy(() => import('./pages/public/Legal'))
 const NotFound = lazy(() => import('./pages/public/NotFound'))
 
@@ -30,6 +29,7 @@ const AdminEventDetail = lazy(() => import('./pages/admin/EventDetail'))
 const AssignAdmins = lazy(() => import('./pages/admin/AssignAdmins'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
 const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'))
+const AdminVisitors = lazy(() => import('./pages/admin/Visitors'))
 const Settings = lazy(() => import('./pages/shared/Settings'))
 
 const EADashboard = lazy(() => import('./pages/eventAdmin/Dashboard'))
@@ -95,26 +95,32 @@ const router = createBrowserRouter([
         element: <GuestOnly />,
         children: [
           { path: '/login', element: <Login /> },
-          { path: '/signup', element: <Signup /> },
         ],
       },
+      // Finding your photos needs no account: pick an event, take a selfie
+      // (or upload one) and see every photo you're in.
+      {
+        element: <UserLayout />,
+        children: [
+          { path: '/events', element: <UserEvents /> },
+          { path: '/events/:eventId', element: <EventDetail /> },
+          { path: '/events/:eventId/results', element: <Results /> },
+        ],
+      },
+      { path: '/events/:eventId/search', element: <Search /> },
+      { path: '/events/:eventId/photo/:photoId', element: <PhotoViewer /> },
       {
         element: <RequireRole roles={['end_user']} />,
         children: [
           {
             element: <UserLayout />,
             children: [
-              { path: '/events', element: <UserEvents /> },
-              { path: '/events/:eventId', element: <EventDetail /> },
-              { path: '/events/:eventId/results', element: <Results /> },
               { path: '/profile', element: <Profile /> },
               { path: '/my-photos', element: <Profile tab="photos" /> },
               { path: '/favorites', element: <Profile tab="favorites" /> },
               { path: '/account', element: <Profile tab="account" /> },
             ],
           },
-          { path: '/events/:eventId/search', element: <Search /> },
-          { path: '/events/:eventId/photo/:photoId', element: <PhotoViewer /> },
         ],
       },
       {
@@ -132,6 +138,7 @@ const router = createBrowserRouter([
               { path: 'events/:eventId/admins', element: <AssignAdmins /> },
               { path: 'admins', element: <AdminUsers tab="admins" /> },
               { path: 'users', element: <AdminUsers tab="guests" /> },
+              { path: 'visitors', element: <AdminVisitors /> },
               { path: 'analytics', element: <AdminAnalytics /> },
               { path: 'settings', element: <Settings /> },
             ],
@@ -147,6 +154,7 @@ const router = createBrowserRouter([
             children: [
               { index: true, element: <EADashboard /> },
               { path: 'events', element: <EAEvents /> },
+              { path: 'events/create', element: <EventForm base="/event-admin" /> },
               { path: 'events/:eventId', element: <EAEventDashboard /> },
               { path: 'events/:eventId/photos', element: <EAPhotos /> },
               { path: 'events/:eventId/settings', element: <EAEventSettings /> },

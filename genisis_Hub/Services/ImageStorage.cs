@@ -46,6 +46,11 @@ namespace genisis_Hub.Services
             using var full = new MemoryStream();
             await img.SaveAsJpegAsync(full, new JpegEncoder { Quality = _quality });
 
+            // A photo already smaller than a thumbnail is its own thumbnail:
+            // enlarging it would only make a bigger, blurrier file.
+            if (Math.Max(img.Width, img.Height) <= _thumbSide)
+                return new ProcessedImage(full.ToArray(), full.ToArray(), img.Width, img.Height);
+
             using var thumbImg = img.Clone(x => x.Resize(new ResizeOptions { Size = new Size(_thumbSide, _thumbSide), Mode = ResizeMode.Max }));
             using var thumb = new MemoryStream();
             await thumbImg.SaveAsJpegAsync(thumb, new JpegEncoder { Quality = 78 });

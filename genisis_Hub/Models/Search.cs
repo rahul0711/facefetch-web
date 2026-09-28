@@ -12,6 +12,9 @@
         public DateTime StartedAt           { get; set; }
         public DateTime? CompletedAt        { get; set; }
         public string?  ErrorMessage        { get; set; }
+        /// <summary>Name and email the visitor typed before searching (no account needed).</summary>
+        public string?  VisitorName         { get; set; }
+        public string?  VisitorEmail        { get; set; }
 
         // Joined
         public string?  EventName           { get; set; }

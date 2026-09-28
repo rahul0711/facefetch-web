@@ -129,6 +129,9 @@ builder.Services.AddHttpClient<AiFaceClient>(client =>
     return handler;
 });
 
+// Google Drive imports (public "Anyone with the link" folders, Drive API key).
+builder.Services.AddHttpClient<GoogleDriveService>(client => client.Timeout = TimeSpan.FromSeconds(120));
+
 // ─── Multipart limit for photo uploads ──────────────────────────────────────
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(opt =>
 {

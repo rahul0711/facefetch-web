@@ -25,11 +25,6 @@ export async function login(email, password) {
   return startSession(data)
 }
 
-export async function signup({ name, email, password, phone }) {
-  await api('/api/auth/signup', { method: 'POST', json: { fullName: name.trim(), email: email.trim(), password, phone: phone || null } })
-  return login(email, password)
-}
-
 export async function refreshMe() {
   const s = readSession()
   if (!s) return null

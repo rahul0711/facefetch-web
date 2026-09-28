@@ -9,7 +9,8 @@ Authenticated calls send the header `Authorization: Bearer <token>`, where the t
 For `<img src>` (and photo downloads), pass the token as `?access_token=<token>` on the photo image,
 thumbnail and download URLs.
 
-Roles: `SuperAdmin`, `EventAdmin`, `Guest`. An event admin only sees events assigned
+Guests don't need an account: anyone can list events, search one with a selfie, and see the photos that search found
+(see *Face search* below). Roles: `SuperAdmin`, `EventAdmin`, `Guest`. An event admin only sees events assigned
 to them, limited by `can_view`, `can_upload`, `can_delete` and `can_manage`. Guests
 see only `Active` and `Completed` events, and only the photos their own searches found.
 
@@ -56,6 +57,8 @@ see only `Active` and `Completed` events, and only the photos their own searches
 | DELETE | `/api/eventadmin/{eventId}/photos/{photoId}` | `can_delete` | |
 | POST | `/api/eventadmin/{eventId}/photos/bulk-delete` | `can_delete` | `{photoIds: []}` |
 | GET | `/api/eventadmin/{eventId}/downloads` | `can_view` | download log |
+| POST | `/api/eventadmin/{eventId}/drive/list` | `can_upload` | `{url, includeSubfolders}`: a Google Drive folder/file shared as "Anyone with the link" → `{name, isFolder, skipped, truncated, files: [{id, name, path, size, resourceKey, alreadyImported}]}` |
+| POST | `/api/eventadmin/{eventId}/drive/import` | `can_upload` | `{files: [{id, name, resourceKey}]}` (1-10 per call): each is downloaded from Drive and processed like an upload. Stored with `photos.source_ref = gdrive:<id>`, so a file is never imported into an event twice |
 
 ## Photos
 | Method | Path | Who | Notes |
@@ -72,13 +75,19 @@ see only `Active` and `Completed` events, and only the photos their own searches
 | DELETE | `/api/photos/{id}` | `can_delete` | |
 | POST | `/api/photos/bulk-delete` | `can_delete` per photo | `{photoIds: []}` |
 
-"Allowed viewers" means a SuperAdmin, an admin of the event with `can_view`, or a guest whose search found that photo.
+"Allowed viewers" means a SuperAdmin, an admin of the event with `can_view`, a logged-in guest whose search found that photo,
+or anyone passing `?key=` from the search that found it. `GET /api/photos/{id}`, `/image`, `/thumbnail`, `/download`
+and `POST /api/photos/download-zip?key=` accept the key without a login.
 
 ## Face search (guests)
+No login needed. A search response includes `accessKey`: a signed key (valid 7 days) that opens only the photos that
+search matched. Every match's `imageUrl`, `thumbnailUrl` and `downloadUrl` already has `?key=` appended. Searches
+without a login are stored with `guest_id = NULL`.
+
 | Method | Path | Who | Notes |
 |---|---|---|---|
-| POST | `/api/search/{eventId}` | logged in | multipart `selfies` (1-5 frames) or `selfie`. The selfie is **not stored**. The threshold comes from `system_settings`, not from the client. Returns matches with `matchedFace`. 422 = no face / too small, 503 = AI offline |
-| GET | `/api/search/{searchId}/results` | owner / event admins | |
+| POST | `/api/search/{eventId}` | anyone | multipart `selfies` (1-5 frames) or `selfie`. The selfie is **not stored**. The threshold comes from `system_settings`, not from the client. Returns matches with `matchedFace`. 422 = no face / too small, 503 = AI offline |
+| GET | `/api/search/{searchId}/results?key=` | owner, key holder, event admins | |
 | GET | `/api/search/my` | logged in | my searches |
 | GET | `/api/search/my/latest/{eventId}` | logged in | my latest results for an event |
 | GET | `/api/search/my/photos` | logged in | every photo I've been found in |
@@ -107,4 +116,5 @@ see only `Active` and `Completed` events, and only the photos their own searches
 - `AiServer:BaseUrl`: the Python server, e.g. `https://localhost:8002`. Set `AiServer:IgnoreSslErrors` to `true` for its self-signed certificate.
 - `FileStorage:Root`: where photos, thumbnails and covers are saved (default `./storage`, **not** public). Related settings are `MaxSidePx` (2560), `JpegQuality` (85) and `ThumbnailSidePx` (480).
 - `Cors:Origins`: extra frontend origins for production.
+- Google Drive import: a Google API key with the **Google Drive API** enabled, in the `google_drive_api_key` system setting (Super Admin → Settings), or `GoogleDrive:ApiKey` in config.
 - `Bootstrap:SuperAdminEmail` / `SuperAdminPassword` / `SuperAdminName`: create the **first** Super Admin on startup, only if none exists yet. Remove them afterwards.

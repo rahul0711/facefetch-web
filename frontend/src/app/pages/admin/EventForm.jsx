@@ -31,7 +31,9 @@ function Section({ title, description, children }) {
   )
 }
 
-export default function EventForm() {
+// base: '/admin' (Super Admin) or '/event-admin' (an event admin creating their own event).
+export default function EventForm({ base = '/admin' }) {
+  const ea = base === '/event-admin'
   const { eventId } = useParams()
   const editing = !!eventId
   useDocumentTitle(editing ? 'Edit event' : 'Create event')
@@ -89,9 +91,9 @@ export default function EventForm() {
         }
       }
       toast(editing ? 'Changes saved' : 'Event created', {
-        description: editing ? undefined : 'Next, assign an event admin to start uploading photos.',
+        description: editing ? undefined : ea ? 'Next, upload the event’s photos.' : 'Next, assign an event admin to start uploading photos.',
       })
-      navigate(editing ? `/admin/events/${eventId}` : `/admin/events/${ev.id}/admins`)
+      navigate(editing ? `${base}/events/${eventId}` : ea ? `${base}/events/${ev.id}/photos` : `${base}/events/${ev.id}/admins`)
     } catch (err) {
       setErrors({ [/code/i.test(err.message) ? 'code' : 'name']: err.message })
       setSaving(false)
@@ -111,12 +113,12 @@ export default function EventForm() {
 
   return (
     <form onSubmit={submit} noValidate className="grid gap-6">
-      <Link to={editing ? `/admin/events/${eventId}` : '/admin/events'} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-900">
+      <Link to={editing ? `${base}/events/${eventId}` : `${base}/events`} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-navy-500 hover:text-navy-900">
         <ArrowLeft className="size-4" /> {editing ? 'Back to event' : 'Events'}
       </Link>
       <PageHeader
         title={editing ? `Edit ${existing?.name}` : 'Create event'}
-        description={editing ? 'Changes are visible to guests immediately.' : 'Set up the event. You can assign admins and upload photos next.'}
+        description={editing ? 'Changes are visible to guests immediately.' : ea ? 'Set up the event. You can upload photos next.' : 'Set up the event. You can assign admins and upload photos next.'}
       />
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_340px]">
@@ -223,7 +225,7 @@ export default function EventForm() {
             <Button type="submit" size="lg" loading={saving} className="flex-1">
               {editing ? 'Save changes' : 'Create event'}
             </Button>
-            <Button variant="secondary" size="lg" to={editing ? `/admin/events/${eventId}` : '/admin/events'}>
+            <Button variant="secondary" size="lg" to={editing ? `${base}/events/${eventId}` : `${base}/events`}>
               Cancel
             </Button>
           </div>

@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { cn } from '../../lib/utils'
 
 // Brand assets, cut from the official Genesis Hub logo (public/logo/logo.jpeg):
@@ -28,9 +28,16 @@ export function LogoMark({ size = 32, className, dark }) {
 
 // Horizontal lockup for navigation: monogram + wordmark, coloured like the
 // logo ("Genesis" navy, "Hub" blue).
+// Always links to the home page; already there, it scrolls back to the top.
 export default function Logo({ to = '/', dark, className, size = 32 }) {
+  const { pathname } = useLocation()
   return (
-    <Link to={to} className={cn('inline-flex items-center gap-2.5 rounded-lg', className)} aria-label="Genesis Hub home">
+    <Link
+      to={to}
+      onClick={() => pathname === to && window.scrollTo({ top: 0, behavior: 'smooth' })}
+      className={cn('inline-flex items-center gap-2.5 rounded-lg', className)}
+      aria-label="Genesis Hub home"
+    >
       <LogoMark size={size} dark={dark} />
       <span className={cn('font-display text-[18px] font-bold tracking-[-0.015em] whitespace-nowrap', dark ? 'text-white' : 'text-navy-950')}>
         Genesis <span className={dark ? 'text-cyan-400' : 'text-brand-700'}>Hub</span>

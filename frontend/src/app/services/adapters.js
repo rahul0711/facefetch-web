@@ -83,7 +83,9 @@ export function toPhoto(p) {
   }
 }
 
-export function toMatch(m) {
+// key: the search's access key; lets a visitor without an account download
+// (and zip) the matched photos. The photo URLs already include it.
+export function toMatch(m, key = null) {
   return {
     photoId: m.photoId,
     score: m.similarityScore,
@@ -96,6 +98,7 @@ export function toMatch(m) {
       src: withToken(m.thumbnailUrl),
       full: withToken(m.imageUrl),
       downloadPath: m.downloadUrl,
+      key,
       width: m.width || 4,
       height: m.height || 3,
       faceCount: m.faceCount ?? 0,
@@ -112,6 +115,7 @@ export function toSearch(s) {
     at: s.completedAt || s.startedAt,
     status: s.searchStatus,
     matchCount: s.matchCount,
-    hits: (s.matches || []).map(toMatch),
+    accessKey: s.accessKey || null,
+    hits: (s.matches || []).map((m) => toMatch(m, s.accessKey || null)),
   }
 }

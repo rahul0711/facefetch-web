@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/geist';
 @import '@fontsource-variable/montserrat';
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
 
 /* ------------------------------------------------------------------ tokens
    Genesis Hub: deep navy as the anchor, electric blue for action, cyan only as
@@ -10,6 +12,8 @@
      wordmark), Geist for UI text. */
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Montserrat Variable', 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  /* Editorial accent on the landing page only ("you're in."). */
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
 
   /* Navy, sampled from the logo's "Genesis" wordmark (#020e39) and the
      monogram's C (#0a3673 -> #19458c). */
@@ -66,6 +70,14 @@
   --animate-shimmer: shimmer 1.6s linear infinite;
   --animate-marquee: marquee var(--marquee-duration, 40s) linear infinite;
   --animate-pulse-ring: pulse-ring 2s ease-out infinite;
+  /* landing: the hero photo wall drifts, a scan beam sweeps it, and the
+     photos you're not in dim while yours light up (one shared 8s cycle) */
+  --animate-wall-up: wall-up var(--wall-duration, 60s) linear infinite;
+  --animate-wall-down: wall-down var(--wall-duration, 60s) linear infinite;
+  --animate-wall-beam: wall-beam 8s var(--ease-out-quint) infinite;
+  --animate-wall-dim: wall-dim 8s ease infinite;
+  --animate-wall-found: wall-found 8s ease infinite;
+  --animate-border-spin: border-spin 4s linear infinite;
 
   @keyframes scan {
     0% { transform: translateY(-100%); opacity: 0; }
@@ -80,10 +92,44 @@
   @keyframes marquee {
     to { transform: translateX(calc(-50% - var(--marquee-gap, 1rem) / 2)); }
   }
+  /* the column holds its photos twice; half its height plus half a gap (gap-3) loops seamlessly */
+  @keyframes wall-up {
+    to { transform: translateY(calc(-50% - 0.375rem)); }
+  }
+  @keyframes wall-down {
+    from { transform: translateY(calc(-50% - 0.375rem)); }
+    to { transform: translateY(0); }
+  }
+  @keyframes wall-beam {
+    0% { top: -10%; opacity: 0; }
+    6% { opacity: 1; }
+    40% { top: 105%; opacity: 1; }
+    46%, 100% { top: 105%; opacity: 0; }
+  }
+  @keyframes wall-dim {
+    0%, 36% { opacity: 1; filter: none; }
+    46%, 88% { opacity: 0.22; filter: grayscale(0.7); }
+    100% { opacity: 1; filter: none; }
+  }
+  @keyframes wall-found {
+    0%, 38% { opacity: 0; transform: scale(1.25); }
+    46%, 88% { opacity: 1; transform: scale(1); }
+    96%, 100% { opacity: 0; transform: scale(1); }
+  }
+  @keyframes border-spin {
+    to { --border-angle: 360deg; }
+  }
   @keyframes pulse-ring {
     0% { box-shadow: 0 0 0 0 rgb(5 176 246 / 0.45); }
     100% { box-shadow: 0 0 0 14px rgb(5 176 246 / 0); }
   }
+}
+
+/* Animatable angle for the spinning gradient border on the landing CTA. */
+@property --border-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
 }
 
 /* ------------------------------------------------------------------- base */

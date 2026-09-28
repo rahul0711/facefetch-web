@@ -9,7 +9,7 @@ import { cn } from '../lib/utils'
 import { ROLE_HOME } from '../services/authService'
 
 const LINKS = [
-  { href: '#features', label: 'Features' },
+  // { href: '#features', label: 'Features' },
   { href: '#how', label: 'How It Works' },
   { href: '#organizers', label: 'For Events' },
   { href: '#privacy', label: 'Privacy' },
@@ -68,8 +68,8 @@ export function PublicNav() {
               <Button to="/login" variant={dark ? 'glass' : 'ghost'} className={cn('max-sm:hidden', dark && 'bg-transparent ring-0')}>
                 Log in
               </Button>
-              <Button to="/signup" variant={dark ? 'light' : 'primary'}>
-                Get Started
+              <Button to="/events" variant={dark ? 'light' : 'primary'}>
+                Find your photos
               </Button>
             </>
           )}
@@ -100,8 +100,8 @@ export function PublicNav() {
             </Button>
           ) : (
             <>
-              <Button to="/signup" size="lg" onClick={() => setOpen(false)}>
-                Get Started
+              <Button to="/events" size="lg" onClick={() => setOpen(false)}>
+                Find your photos
               </Button>
               <Button to="/login" size="lg" variant="secondary" onClick={() => setOpen(false)}>
                 Log in
@@ -119,7 +119,9 @@ export function Footer() {
     <footer className="bg-navy-950 text-navy-300">
       <div className="container-page grid gap-10 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="max-w-xs">
-          <GenesisHubLogo dark className="h-24" />
+          <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} aria-label="Genesis Hub home" className="inline-block">
+            <GenesisHubLogo dark className="h-24" />
+          </Link>
           <p className="mt-5 text-sm leading-relaxed text-navy-400">
             Find every moment you’re in. AI face search for weddings, conferences, festivals and every event in between.
           </p>
@@ -143,7 +145,7 @@ export function Footer() {
         <FooterCol
           title="Get started"
           links={[
-            ['/signup', 'Create an account'],
+            ['/events', 'Find your photos'],
             ['/login', 'Log in'],
             ['/#faq', 'FAQ'],
           ]}

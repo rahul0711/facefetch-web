@@ -49,9 +49,9 @@ export default function Login() {
       </form>
 
       <p className="mt-8 text-center text-sm text-navy-500">
-        New to Genesis Hub?{' '}
-        <Link to="/signup" className="font-medium text-brand-700 hover:underline">
-          Create an account
+        Looking for your photos?{' '}
+        <Link to="/events" className="font-medium text-brand-700 hover:underline">
+          No account needed
         </Link>
       </p>
     </AuthShell>

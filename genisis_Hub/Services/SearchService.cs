@@ -8,8 +8,9 @@ namespace genisis_Hub.Services
 {
     public interface ISearchService
     {
-        Task<SearchResponse> SearchAsync(ulong eventId, ulong? guestId, float[] queryEmbedding);
-        Task<SearchResponse> RecordFailedSearchAsync(ulong eventId, ulong? guestId, string error);
+        Task<SearchResponse> SearchAsync(ulong eventId, ulong? guestId, Visitor visitor, float[] queryEmbedding);
+        Task<SearchResponse> RecordFailedSearchAsync(ulong eventId, ulong? guestId, Visitor visitor, string error);
+        Task<List<VisitorResponse>> GetVisitorsAsync(ulong? eventId, string? search = null);
         Task<SearchResponse?> GetSearchResultsAsync(ulong searchId);
         Task<SearchResponse?> GetLatestForEventAsync(ulong userId, ulong eventId);
         Task<List<Search>> GetSearchesByEventAsync(ulong eventId);
@@ -17,6 +18,9 @@ namespace genisis_Hub.Services
         Task<List<MatchResponse>> GetMyPhotosAsync(ulong userId);
         Task<int> ClearHistoryAsync(ulong userId);
     }
+
+    /// <summary>Who ran a search: typed in by the visitor before taking their selfie.</summary>
+    public record Visitor(string Name, string Email);
 
     public class SearchService : ISearchService
     {
@@ -29,17 +33,17 @@ namespace genisis_Hub.Services
             _db = db; _faces = faces; _settings = settings;
         }
 
-        public async Task<SearchResponse> SearchAsync(ulong eventId, ulong? guestId, float[] queryEmbedding)
+        public async Task<SearchResponse> SearchAsync(ulong eventId, ulong? guestId, Visitor visitor, float[] queryEmbedding)
         {
             // The threshold is a server setting -- never taken from the client.
             var threshold = await _settings.MatchThresholdAsync();
             using var conn = _db.CreateConnection();
 
             var searchId = await conn.QueryFirstAsync<ulong>(@"
-                INSERT INTO searches (event_id, guest_id, search_status, face_detected, similarity_threshold)
-                VALUES (@EventId, @GuestId, 'Processing', 1, @Threshold);
+                INSERT INTO searches (event_id, guest_id, visitor_name, visitor_email, search_status, face_detected, similarity_threshold)
+                VALUES (@EventId, @GuestId, @VisitorName, @VisitorEmail, 'Processing', 1, @Threshold);
                 SELECT LAST_INSERT_ID();",
-                new { EventId = eventId, GuestId = guestId, Threshold = threshold });
+                new { EventId = eventId, GuestId = guestId, VisitorName = visitor.Name, VisitorEmail = visitor.Email, Threshold = threshold });
 
             // Search ONLY this event's faces. Both sides are L2-normalised, so
             // cosine similarity == dot product.
@@ -75,15 +79,15 @@ namespace genisis_Hub.Services
             return response;
         }
 
-        public async Task<SearchResponse> RecordFailedSearchAsync(ulong eventId, ulong? guestId, string error)
+        public async Task<SearchResponse> RecordFailedSearchAsync(ulong eventId, ulong? guestId, Visitor visitor, string error)
         {
             var threshold = await _settings.MatchThresholdAsync();
             using var conn = _db.CreateConnection();
             var searchId = await conn.QueryFirstAsync<ulong>(@"
-                INSERT INTO searches (event_id, guest_id, search_status, face_detected, similarity_threshold, completed_at, error_message)
-                VALUES (@EventId, @GuestId, 'Failed', 0, @Threshold, NOW(), @Error);
+                INSERT INTO searches (event_id, guest_id, visitor_name, visitor_email, search_status, face_detected, similarity_threshold, completed_at, error_message)
+                VALUES (@EventId, @GuestId, @VisitorName, @VisitorEmail, 'Failed', 0, @Threshold, NOW(), @Error);
                 SELECT LAST_INSERT_ID();",
-                new { EventId = eventId, GuestId = guestId, Threshold = threshold, Error = error });
+                new { EventId = eventId, GuestId = guestId, VisitorName = visitor.Name, VisitorEmail = visitor.Email, Threshold = threshold, Error = error });
             return await GetSearchResultsAsync(searchId) ?? new SearchResponse { SearchId = searchId };
         }
 
@@ -134,7 +138,7 @@ namespace genisis_Hub.Services
         {
             using var conn = _db.CreateConnection();
             return (await conn.QueryAsync<Search>(@"
-                SELECT s.*, e.event_name AS EventName, u.full_name AS GuestName
+                SELECT s.*, e.event_name AS EventName, COALESCE(s.visitor_name, u.full_name) AS GuestName
                 FROM searches s
                 JOIN events e ON s.event_id = e.event_id
                 LEFT JOIN users u ON s.guest_id = u.user_id
@@ -167,6 +171,31 @@ namespace genisis_Hub.Services
                 GROUP BY p.photo_id, p.event_id, p.original_file_name, p.width, p.height, p.face_count, p.uploaded_at
                 ORDER BY score DESC", new { UserId = userId });
             return rows.Select(r => ToMatch(r.PhotoId, r.EventId, (double)r.Score, r.OriginalFileName, r.Width, r.Height, r.FaceCount, r.UploadedAt)).ToList();
+        }
+
+        /// <summary>
+        /// Everyone who searched (one row per email), newest first; optionally only
+        /// in one event, and filtered by name/email text.
+        /// </summary>
+        public async Task<List<VisitorResponse>> GetVisitorsAsync(ulong? eventId, string? search = null)
+        {
+            using var conn = _db.CreateConnection();
+            return (await conn.QueryAsync<VisitorResponse>(@"
+                SELECT MAX(s.visitor_name)          AS Name,
+                       LOWER(s.visitor_email)       AS Email,
+                       COUNT(*)                     AS Searches,
+                       CAST(COALESCE(MAX(s.match_count), 0) AS SIGNED) AS PhotosFound,
+                       GROUP_CONCAT(DISTINCT e.event_name ORDER BY e.event_name SEPARATOR ', ') AS Events,
+                       MIN(s.started_at)            AS FirstSeen,
+                       MAX(s.started_at)            AS LastSeen
+                FROM searches s JOIN events e ON e.event_id = s.event_id
+                WHERE s.visitor_email IS NOT NULL
+                  AND (@EventId IS NULL OR s.event_id = @EventId)
+                  AND (@Search IS NULL OR s.visitor_name LIKE @Like OR s.visitor_email LIKE @Like)
+                GROUP BY LOWER(s.visitor_email)
+                ORDER BY LastSeen DESC
+                LIMIT 5000",
+                new { EventId = eventId, Search = string.IsNullOrWhiteSpace(search) ? null : search, Like = $"%{search}%" })).ToList();
         }
 
         /// <summary>Deletes the user's searches (their matches cascade).</summary>

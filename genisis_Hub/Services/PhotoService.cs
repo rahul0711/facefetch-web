@@ -12,6 +12,8 @@ namespace genisis_Hub.Services
         Task<Photo?> GetPhotoByIdAsync(ulong photoId);
         Task<List<Photo>> GetPhotosByIdsAsync(IEnumerable<ulong> photoIds);
         Task<UploadResultItem> UploadAsync(IFormFile file, ulong eventId, ulong uploadedBy);
+        Task<UploadResultItem> UploadAsync(Stream content, string fileName, long length, ulong eventId, ulong uploadedBy, string? sourceRef = null);
+        Task<HashSet<string>> ExistingSourceRefsAsync(ulong eventId, IEnumerable<string> sourceRefs);
         Task<UploadResultItem> ReanalyzeAsync(Photo photo);
         Task<bool> DeletePhotoAsync(ulong photoId);
     }
@@ -72,26 +74,36 @@ namespace genisis_Hub.Services
         /// </summary>
         public async Task<UploadResultItem> UploadAsync(IFormFile file, ulong eventId, ulong uploadedBy)
         {
-            var result = new UploadResultItem { FileName = file.FileName };
-            var ext = Path.GetExtension(file.FileName).TrimStart('.').ToLowerInvariant();
+            await using var stream = file.OpenReadStream();
+            return await UploadAsync(stream, file.FileName, file.Length, eventId, uploadedBy);
+        }
+
+        /// <summary>
+        /// The same pipeline for any source (a browser upload, a Google Drive file).
+        /// sourceRef (e.g. "gdrive:&lt;fileId&gt;") is stored in photos.source_ref so the
+        /// same file isn't imported into an event twice.
+        /// </summary>
+        public async Task<UploadResultItem> UploadAsync(Stream content, string fileName, long length, ulong eventId, ulong uploadedBy, string? sourceRef = null)
+        {
+            var result = new UploadResultItem { FileName = fileName };
+            var ext = Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
             if (!(await _settings.AllowedImageTypesAsync()).Contains(ext))
             {
                 result.Status = "Rejected";
                 result.Error = $"File type .{ext} is not allowed";
                 return result;
             }
-            if (file.Length == 0 || file.Length > await _settings.MaxUploadBytesAsync())
+            if (length == 0 || length > await _settings.MaxUploadBytesAsync())
             {
                 result.Status = "Rejected";
-                result.Error = file.Length == 0 ? "File is empty" : "File is larger than the upload limit";
+                result.Error = length == 0 ? "File is empty" : "File is larger than the upload limit";
                 return result;
             }
 
             ProcessedImage img;
             try
             {
-                await using var stream = file.OpenReadStream();
-                img = await _storage.ProcessAsync(stream);
+                img = await _storage.ProcessAsync(content);
             }
             catch (Exception ex) when (ex is UnknownImageFormatException or InvalidImageContentException or NotSupportedException)
             {
@@ -107,16 +119,18 @@ namespace genisis_Hub.Services
             ulong photoId;
             using (var conn = _db.CreateConnection())
             {
-                photoId = await conn.QueryFirstAsync<ulong>(@"
+                // source_ref is only written for imports, so plain uploads don't depend on that column.
+                var (col, val) = sourceRef == null ? ("", "") : (", source_ref", ", @SourceRef");
+                photoId = await conn.QueryFirstAsync<ulong>($@"
                     INSERT INTO photos (event_id, original_file_name, stored_file_name, file_path, thumbnail_path,
-                                        file_size, mime_type, width, height, status, uploaded_by)
+                                        file_size, mime_type, width, height, status, uploaded_by{col})
                     VALUES (@EventId, @OriginalFileName, @StoredFileName, @FilePath, @ThumbnailPath,
-                            @FileSize, 'image/jpeg', @Width, @Height, 'Processing', @UploadedBy);
+                            @FileSize, 'image/jpeg', @Width, @Height, 'Processing', @UploadedBy{val});
                     SELECT LAST_INSERT_ID();",
                     new
                     {
                         EventId = eventId,
-                        OriginalFileName = Truncate(Path.GetFileName(file.FileName), 255),
+                        OriginalFileName = Truncate(Path.GetFileName(fileName), 255),
                         StoredFileName = stored,
                         FilePath = filePath,
                         ThumbnailPath = thumbPath,
@@ -124,11 +138,22 @@ namespace genisis_Hub.Services
                         Width = (uint)img.Width,
                         Height = (uint)img.Height,
                         UploadedBy = uploadedBy,
+                        SourceRef = sourceRef,
                     });
             }
             result.PhotoId = photoId;
             result.ThumbnailUrl = Urls.PhotoThumbnail(photoId);
             return await AnalyzeAndFinishAsync(photoId, img.Compressed, (uint)img.Width, (uint)img.Height, result);
+        }
+
+        public async Task<HashSet<string>> ExistingSourceRefsAsync(ulong eventId, IEnumerable<string> sourceRefs)
+        {
+            var refs = sourceRefs.Distinct().ToArray();
+            if (refs.Length == 0) return new();
+            using var conn = _db.CreateConnection();
+            return (await conn.QueryAsync<string>(
+                "SELECT source_ref FROM photos WHERE event_id=@EventId AND source_ref IN @Refs",
+                new { EventId = eventId, Refs = refs })).ToHashSet();
         }
 
         public async Task<UploadResultItem> ReanalyzeAsync(Photo photo)

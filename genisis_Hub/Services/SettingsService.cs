@@ -16,7 +16,12 @@ namespace genisis_Hub.Services
         private static DateTime _loadedAt = DateTime.MinValue;
         private static readonly SemaphoreSlim _lock = new(1, 1);
 
-        public SettingsService(DbContext db) => _db = db;
+        private readonly IConfiguration _config;
+
+        public SettingsService(DbContext db, IConfiguration config)
+        {
+            _db = db; _config = config;
+        }
 
         private async Task<Dictionary<string, string>> AllAsync()
         {
@@ -49,6 +54,14 @@ namespace genisis_Hub.Services
         {
             var all = await AllAsync();
             return (all.TryGetValue("max_upload_size_mb", out var v) && int.TryParse(v, out var mb) && mb > 0 ? mb : 100) * 1024L * 1024L;
+        }
+
+        /// <summary>Google API key for Drive imports: system_settings, else GoogleDrive:ApiKey in config.</summary>
+        public async Task<string?> GoogleDriveApiKeyAsync()
+        {
+            var all = await AllAsync();
+            var key = all.TryGetValue("google_drive_api_key", out var v) && !string.IsNullOrWhiteSpace(v) ? v : _config["GoogleDrive:ApiKey"];
+            return string.IsNullOrWhiteSpace(key) ? null : key.Trim();
         }
 
         public async Task<HashSet<string>> AllowedImageTypesAsync()
