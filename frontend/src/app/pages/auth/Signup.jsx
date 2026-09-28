@@ -1,4 +1,4 @@
-import { ArrowRight, KeyRound, Mail, User } from 'lucide-react'
+import { ArrowRight, KeyRound, Mail, Phone, User } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/AuthContext'
@@ -11,7 +11,7 @@ export default function Signup() {
   useDocumentTitle('Create account')
   const { signup } = useAuth()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' })
   const [agree, setAgree] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
@@ -46,6 +46,9 @@ export default function Signup() {
         </Field>
         <Field label="Email" htmlFor="email" error={errors.email}>
           <Input id="email" type="email" icon={Mail} autoComplete="email" value={form.email} onChange={set('email')} placeholder="you@example.com" aria-invalid={!!errors.email} />
+        </Field>
+        <Field label="Phone" htmlFor="phone" optional>
+          <Input id="phone" type="tel" icon={Phone} autoComplete="tel" value={form.phone} onChange={set('phone')} placeholder="+91 98765 43210" />
         </Field>
         <Field label="Password" htmlFor="password" error={errors.password} hint="At least 6 characters.">
           <Input id="password" type="password" icon={KeyRound} autoComplete="new-password" value={form.password} onChange={set('password')} placeholder="••••••••" aria-invalid={!!errors.password} />

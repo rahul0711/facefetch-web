@@ -1,65 +1,113 @@
-import { Ellipsis, Mail, Search, UserPlus, Users as UsersIcon } from 'lucide-react'
+import { Ellipsis, Eye, EyeOff, KeyRound, Mail, Phone, Search, User, UserPlus, Users as UsersIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import Button from '../../components/ui/Button'
 import { Menu, Modal, useToast } from '../../components/ui/overlay'
-import { Avatar, Badge, EmptyState, Field, Input, PageHeader, Segmented, Skeleton } from '../../components/ui/primitives'
+import { Avatar, Badge, EmptyState, Field, Input, PageHeader, Segmented, Select, Skeleton } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
-import { fmtDate } from '../../lib/utils'
-import { db } from '../../services/db'
-import { inviteAdmin, listUsers, setUserStatus } from '../../services/userService'
+import { fmtDate, timeAgo } from '../../lib/utils'
+import { ROLE_LABEL } from '../../services/authService'
+import { createUser, listEventAdmins, listUsers, setUserActive } from '../../services/userService'
 
-const STATUS_TONE = { Active: 'ok', Invited: 'brand', Suspended: 'bad' }
+const EMPTY = { name: '', email: '', phone: '', password: '' }
 
-function InviteModal({ open, onClose }) {
+function randomPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const a = crypto.getRandomValues(new Uint32Array(12))
+  return Array.from(a, (n) => chars[n % chars.length]).join('')
+}
+
+/** Super Admin creates an account directly (there is no email invite flow). */
+export function CreateUserModal({ open, onClose, onCreated, role: fixedRole }) {
   const toast = useToast()
-  const [form, setForm] = useState({ name: '', email: '', title: '' })
-  const [error, setError] = useState('')
+  const [form, setForm] = useState(EMPTY)
+  const [role, setRole] = useState(fixedRole || 'event_admin')
+  const [show, setShow] = useState(false)
+  const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  const close = () => {
+    setForm(EMPTY)
+    setErrors({})
+    onClose()
+  }
+
   const submit = async (e) => {
     e.preventDefault()
-    if (form.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(form.email)) {
-      setError('Enter a name and a valid email.')
-      return
-    }
+    const errs = {}
+    if (form.name.trim().length < 2) errs.name = 'Enter their full name.'
+    if (!/^\S+@\S+\.\S+$/.test(form.email)) errs.email = 'Enter a valid email.'
+    if (form.password.length < 6) errs.password = 'Use at least 6 characters.'
+    setErrors(errs)
+    if (Object.keys(errs).length) return
     setSaving(true)
     try {
-      await inviteAdmin(form)
-      toast('Invite sent', { description: `${form.name} can sign in once they accept.` })
-      setForm({ name: '', email: '', title: '' })
-      onClose()
+      const u = await createUser({ ...form, role })
+      toast(`${ROLE_LABEL[role]} account created`, { description: `Share the email and password with ${form.name.trim()} so they can sign in.` })
+      onCreated?.(u)
+      close()
     } catch (err) {
-      setError(err.message)
+      setErrors({ email: err.message })
     } finally {
       setSaving(false)
     }
   }
+
   return (
     <Modal
       open={open}
-      onClose={onClose}
-      title="Invite an event admin"
-      description="They’ll only see events you assign to them."
+      onClose={close}
+      title={fixedRole === 'event_admin' ? 'Create an event admin' : 'Create an account'}
+      description="They sign in with this email and password. Event admins only see events you assign to them."
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={close}>
             Cancel
           </Button>
-          <Button type="submit" form="invite-form" loading={saving}>
-            <Mail /> Send invite
+          <Button type="submit" form="create-user-form" loading={saving}>
+            <UserPlus /> Create account
           </Button>
         </>
       }
     >
-      <form id="invite-form" onSubmit={submit} className="grid gap-4" noValidate>
-        <Field label="Full name" htmlFor="inv-name">
-          <Input id="inv-name" data-autofocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ananya Rao" />
+      <form id="create-user-form" onSubmit={submit} className="grid gap-4" noValidate>
+        {!fixedRole && (
+          <Field label="Role" htmlFor="cu-role" hint={role === 'super_admin' ? 'Full control of every event, user and setting.' : role === 'event_admin' ? 'Uploads and manages photos for assigned events.' : 'Searches events for their own photos.'}>
+            <Select id="cu-role" value={role} onChange={(e) => setRole(e.target.value)}>
+              <option value="event_admin">Event Admin</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="end_user">Guest</option>
+            </Select>
+          </Field>
+        )}
+        <Field label="Full name" htmlFor="cu-name" error={errors.name}>
+          <Input id="cu-name" icon={User} data-autofocus value={form.name} onChange={set('name')} placeholder="Ananya Rao" aria-invalid={!!errors.name} />
         </Field>
-        <Field label="Email" htmlFor="inv-email" error={error}>
-          <Input id="inv-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="ananya@studio.com" aria-invalid={!!error} />
+        <Field label="Email" htmlFor="cu-email" error={errors.email}>
+          <Input id="cu-email" icon={Mail} type="email" value={form.email} onChange={set('email')} placeholder="ananya@studio.com" aria-invalid={!!errors.email} />
         </Field>
-        <Field label="Role or title" htmlFor="inv-title" optional>
-          <Input id="inv-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Lead Photographer" />
+        <Field label="Phone" htmlFor="cu-phone" optional>
+          <Input id="cu-phone" icon={Phone} type="tel" value={form.phone} onChange={set('phone')} />
+        </Field>
+        <Field label="Password" htmlFor="cu-pass" error={errors.password} hint="They can change it later in Settings.">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Input id="cu-pass" icon={KeyRound} type={show ? 'text' : 'password'} value={form.password} onChange={set('password')} autoComplete="new-password" aria-invalid={!!errors.password} className="pr-10" />
+              <button type="button" onClick={() => setShow((s) => !s)} className="absolute top-1/2 right-2 grid size-8 -translate-y-1/2 place-items-center rounded-md text-navy-400 hover:text-navy-800" aria-label={show ? 'Hide password' : 'Show password'}>
+                {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setForm((f) => ({ ...f, password: randomPassword() }))
+                setShow(true)
+              }}
+            >
+              Generate
+            </Button>
+          </div>
         </Field>
       </form>
     </Modal>
@@ -71,36 +119,51 @@ export default function AdminUsers({ tab }) {
   useDocumentTitle(admins ? 'Event admins' : 'Users')
   const navigate = useNavigate()
   const toast = useToast()
-  const { data: users, loading } = useQuery(() => listUsers({ role: admins ? 'event_admin' : 'end_user' }), [admins])
+  const { data: users, loading } = useQuery(() => (admins ? listEventAdmins() : listUsers()), [admins])
   const [q, setQ] = useState('')
-  const [inviting, setInviting] = useState(false)
-  const shown = (users || []).filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()))
-  const eventName = (id) => db().events.find((e) => e.id === id)?.name
+  const [role, setRole] = useState('all')
+  const [creating, setCreating] = useState(false)
+  const shown = (users || []).filter((u) => (admins || role === 'all' || u.role === role) && `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()))
+
+  const toggleActive = async (u) => {
+    try {
+      await setUserActive(u.id, !u.isActive)
+      toast(`${u.name} ${u.isActive ? 'deactivated' : 'reactivated'}`, { tone: u.isActive ? 'info' : 'success' })
+    } catch (e) {
+      toast(e.message, { tone: 'error' })
+    }
+  }
 
   return (
     <div className="grid gap-6">
       <PageHeader
         title={admins ? 'Event admins' : 'Users'}
-        description={admins ? 'Photographers and organizers who manage individual events.' : 'Guests who use Genesis Hub to find their photos.'}
+        description={admins ? 'Photographers and organizers who manage individual events.' : 'Everyone with a Genesis Hub account.'}
         actions={
-          admins && (
-            <Button onClick={() => setInviting(true)}>
-              <UserPlus /> Invite admin
-            </Button>
-          )
+          <Button onClick={() => setCreating(true)}>
+            <UserPlus /> {admins ? 'Add event admin' : 'Add user'}
+          </Button>
         }
       />
       <div className="flex flex-wrap items-center gap-3">
         <Segmented
-          label="User type"
+          label="User list"
           size="sm"
           value={tab}
           onChange={(v) => navigate(v === 'admins' ? '/admin/admins' : '/admin/users')}
           options={[
-            { value: 'guests', label: 'Guests' },
+            { value: 'guests', label: 'All users' },
             { value: 'admins', label: 'Event admins' },
           ]}
         />
+        {!admins && (
+          <Select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Filter by role" className="h-10 w-40">
+            <option value="all">All roles</option>
+            <option value="end_user">Guests</option>
+            <option value="event_admin">Event Admins</option>
+            <option value="super_admin">Super Admins</option>
+          </Select>
+        )}
         <div className="ml-auto w-full sm:w-64">
           <Input icon={Search} placeholder="Search by name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users" className="h-10" />
         </div>
@@ -114,16 +177,21 @@ export default function AdminUsers({ tab }) {
             ))}
           </div>
         ) : !shown.length ? (
-          <EmptyState icon={UsersIcon} title={q ? 'No one matches' : 'No users yet'}>
-            {q ? 'Try a different name or email.' : 'Guests appear here once they sign up for an event.'}
+          <EmptyState
+            icon={UsersIcon}
+            title={q ? 'No one matches' : admins ? 'No event admins yet' : 'No users yet'}
+            action={!q && <Button onClick={() => setCreating(true)}><UserPlus /> {admins ? 'Add event admin' : 'Add user'}</Button>}
+          >
+            {q ? 'Try a different name or email.' : admins ? 'Create an event admin, then assign them to events.' : 'Guests appear here once they sign up.'}
           </EmptyState>
         ) : (
           <table className="w-full text-left text-sm">
             <thead className="border-b border-navy-100 bg-navy-50/60 text-[12px] font-medium tracking-wide text-navy-500 uppercase">
               <tr>
                 <th className="px-4 py-3 font-medium sm:px-5">Name</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">{admins ? 'Assigned events' : 'Events'}</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell">{admins ? 'Assigned events' : 'Role'}</th>
                 <th className="hidden px-4 py-3 font-medium lg:table-cell">Joined</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell">Last sign-in</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="w-12 px-4 py-3">
                   <span className="sr-only">Actions</span>
@@ -146,8 +214,8 @@ export default function AdminUsers({ tab }) {
                     {admins ? (
                       u.assignedEvents.length ? (
                         <span className="flex flex-wrap gap-1">
-                          {u.assignedEvents.slice(0, 2).map((id) => (
-                            <Badge key={id}>{eventName(id)}</Badge>
+                          {u.assignedEvents.slice(0, 2).map((e) => (
+                            <Badge key={e.eventId}>{e.name}</Badge>
                           ))}
                           {u.assignedEvents.length > 2 && <Badge>+{u.assignedEvents.length - 2}</Badge>}
                         </span>
@@ -155,14 +223,13 @@ export default function AdminUsers({ tab }) {
                         <span className="text-navy-400">None yet</span>
                       )
                     ) : (
-                      <span>
-                        {u.eventsJoined} events · {u.searches} searched
-                      </span>
+                      <Badge tone={u.role === 'super_admin' ? 'brand' : 'neutral'}>{ROLE_LABEL[u.role]}</Badge>
                     )}
                   </td>
                   <td className="hidden px-4 py-3 text-navy-500 lg:table-cell">{fmtDate(u.joined)}</td>
+                  <td className="hidden px-4 py-3 text-navy-500 lg:table-cell">{u.lastLoginAt ? timeAgo(u.lastLoginAt) : 'Never'}</td>
                   <td className="px-4 py-3">
-                    <Badge tone={STATUS_TONE[u.status]} dot>
+                    <Badge tone={u.isActive ? 'ok' : 'bad'} dot>
                       {u.status}
                     </Badge>
                   </td>
@@ -173,25 +240,7 @@ export default function AdminUsers({ tab }) {
                           <Ellipsis className="size-4" />
                         </button>
                       )}
-                      items={[
-                        u.status === 'Invited' && { label: 'Resend invite', icon: Mail, onClick: () => toast(`Invite re-sent to ${u.email}`) },
-                        u.status !== 'Suspended'
-                          ? {
-                              label: 'Suspend',
-                              danger: true,
-                              onClick: async () => {
-                                await setUserStatus(u.id, 'Suspended')
-                                toast(`${u.name} suspended`, { tone: 'info' })
-                              },
-                            }
-                          : {
-                              label: 'Reactivate',
-                              onClick: async () => {
-                                await setUserStatus(u.id, 'Active')
-                                toast(`${u.name} reactivated`)
-                              },
-                            },
-                      ]}
+                      items={[u.isActive ? { label: 'Deactivate', danger: true, onClick: () => toggleActive(u) } : { label: 'Reactivate', onClick: () => toggleActive(u) }]}
                     />
                   </td>
                 </tr>
@@ -200,7 +249,7 @@ export default function AdminUsers({ tab }) {
           </table>
         )}
       </div>
-      <InviteModal open={inviting} onClose={() => setInviting(false)} />
+      <CreateUserModal open={creating} onClose={() => setCreating(false)} role={admins ? 'event_admin' : undefined} />
     </div>
   )
 }

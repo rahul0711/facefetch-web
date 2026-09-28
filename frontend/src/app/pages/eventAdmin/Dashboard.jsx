@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { Link } from 'react-router'
 import { useAuth } from '../../auth/AuthContext'
 import { AreaChart, Panel } from '../../components/charts'
-import { ActivityFeed, EventCover } from '../../components/console'
+import { EventCover } from '../../components/console'
 import Button from '../../components/ui/Button'
 import { EmptyState, PageHeader, Skeleton, StatusBadge } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
@@ -12,13 +12,14 @@ import { adminOverview } from '../../services/analyticsService'
 import { listAdminEvents } from '../../services/eventService'
 import { PermissionChips } from './shared'
 
-export function AssignedEventCard({ ev, i }) {
+export function AssignedEventCard({ ev, stats, i }) {
+  const st = stats || {}
   const metrics = [
-    ['Photos', ev.stats.photos, Images],
-    ['Faces', ev.stats.faces, ScanFace],
-    ['Searches', ev.stats.searches, ScanSearch],
-    ['Visitors', ev.stats.visitors, Users],
-    ['Downloads', ev.stats.downloads, Download],
+    ['Photos', st.photos ?? ev.photoCount, Images],
+    ['Faces', st.faces, ScanFace],
+    ['Searches', st.searches, ScanSearch],
+    ['Visitors', st.uniqueVisitors, Users],
+    ['Downloads', st.downloads, Download],
   ]
   return (
     <motion.article
@@ -36,12 +37,10 @@ export function AssignedEventCard({ ev, i }) {
             </Link>
             <StatusBadge status={ev.status} />
           </div>
-          <p className="text-sm text-navy-500">
-            {fmtDate(ev.date)} · {ev.city}
-          </p>
+          <p className="text-sm text-navy-500">{[ev.date && fmtDate(ev.date), ev.location].filter(Boolean).join(' · ') || ev.code}</p>
         </div>
         <div className="flex gap-2 max-sm:w-full">
-          {ev.perms.upload && (
+          {ev.perms?.canUpload && (
             <Button variant="secondary" to={`/event-admin/events/${ev.id}/photos`} className="max-sm:flex-1">
               <CloudUpload /> Upload
             </Button>
@@ -57,12 +56,12 @@ export function AssignedEventCard({ ev, i }) {
             <dt className="flex items-center gap-1 text-[12px] text-navy-500">
               <Icon className="size-3" /> {label}
             </dt>
-            <dd className="mt-0.5 font-semibold text-navy-900 tabular-nums">{compact(v)}</dd>
+            <dd className="mt-0.5 font-semibold text-navy-900 tabular-nums">{v == null ? '—' : compact(v)}</dd>
           </div>
         ))}
       </dl>
       <div className="border-t border-navy-100 bg-navy-50/40 px-4 pt-2 sm:px-5">
-        <PermissionChips perms={ev.perms} />
+        {ev.perms && <PermissionChips perms={ev.perms} />}
       </div>
     </motion.article>
   )
@@ -71,8 +70,8 @@ export function AssignedEventCard({ ev, i }) {
 export default function EADashboard() {
   useDocumentTitle('Overview')
   const { user } = useAuth()
-  const { data: events, loading } = useQuery(() => listAdminEvents(user.id), [user.id])
-  const { data: overview } = useQuery(() => adminOverview(user.id), [user.id])
+  const { data: events, loading } = useQuery(() => listAdminEvents(), [])
+  const { data: overview } = useQuery(() => adminOverview(30), [])
 
   return (
     <div className="grid gap-6">
@@ -80,7 +79,7 @@ export default function EADashboard() {
         title={`${greeting()}, ${firstName(user.name)}`}
         description={
           events
-            ? `You manage ${events.length} event${events.length === 1 ? '' : 's'}. ${events.filter((e) => e.status === 'Live').length ? 'Guests are searching right now.' : ''}`
+            ? `You manage ${events.length} event${events.length === 1 ? '' : 's'}. ${events.filter((e) => e.status === 'Active').length ? 'Guests are searching right now.' : ''}`
             : 'Loading your events…'
         }
       />
@@ -113,7 +112,7 @@ export default function EADashboard() {
         {loading ? (
           [0, 1].map((i) => <Skeleton key={i} className="h-44 rounded-2xl" />)
         ) : events.length ? (
-          events.map((ev, i) => <AssignedEventCard key={ev.id} ev={ev} i={i} />)
+          events.map((ev, i) => <AssignedEventCard key={ev.id} ev={ev} stats={overview?.perEvent[ev.id]} i={i} />)
         ) : (
           <EmptyState icon={CalendarRange} title="No events assigned yet" className="rounded-2xl border border-navy-100 bg-white">
             When a Super Admin assigns you to an event, it’ll appear here with everything you need to upload and manage photos.
@@ -126,8 +125,8 @@ export default function EADashboard() {
           <Panel title="Guest searches" description="Across your events, last 30 days" className="lg:col-span-2">
             <AreaChart data={overview.searches} unit="Searches" height={200} />
           </Panel>
-          <Panel title="Recent activity">
-            <ActivityFeed items={overview.activity} />
+          <Panel title="Photos uploaded" description="Last 30 days">
+            <AreaChart data={overview.uploads} unit="Photos" height={200} />
           </Panel>
         </div>
       )}

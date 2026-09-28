@@ -6,8 +6,8 @@ import { AdminEventCard, CardGridSkeleton } from '../../components/console'
 import Button from '../../components/ui/Button'
 import { Modal, useToast } from '../../components/ui/overlay'
 import { EmptyState, Input, PageHeader, Segmented } from '../../components/ui/primitives'
-import { EVENT_STATUSES } from '../../data/seed'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
+import { EVENT_STATUSES } from '../../services/adapters'
 import { archiveEvent, listEvents } from '../../services/eventService'
 
 export default function AdminEvents() {
@@ -28,7 +28,7 @@ export default function AdminEvents() {
   }, [events])
 
   const shown = (events || []).filter(
-    (e) => (status === 'All' || e.status === status) && `${e.name} ${e.city} ${e.type}`.toLowerCase().includes(q.toLowerCase()),
+    (e) => (status === 'All' || e.status === status) && `${e.name} ${e.code} ${e.location}`.toLowerCase().includes(q.toLowerCase()),
   )
 
   return (
@@ -104,10 +104,15 @@ export default function AdminEvents() {
               loading={busy}
               onClick={async () => {
                 setBusy(true)
-                await archiveEvent(archiving.id)
-                setBusy(false)
-                toast(`${archiving.name} archived`)
-                setArchiving(null)
+                try {
+                  await archiveEvent(archiving.eventId)
+                  toast(`${archiving.name} archived`)
+                  setArchiving(null)
+                } catch (e) {
+                  toast(e.message, { tone: 'error' })
+                } finally {
+                  setBusy(false)
+                }
               }}
             >
               Archive event

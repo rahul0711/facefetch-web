@@ -2,7 +2,6 @@ import { MotionConfig } from 'motion/react'
 import { lazy, Suspense } from 'react'
 import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router'
 import { AuthProvider, useAuth } from './auth/AuthContext'
-import DemoMode from './components/DemoMode'
 import { ToastProvider } from './components/ui/overlay'
 import { LogoMark } from './components/ui/Logo'
 import PublicLayout from './layouts/PublicLayout'
@@ -54,15 +53,12 @@ function PageFallback() {
 }
 
 function Root() {
-  const { pathname } = useLocation()
-  const immersive = /\/(search|photo\/)/.test(pathname) || pathname.startsWith('/lab')
   return (
     <>
       <ScrollRestoration getKey={(loc) => loc.pathname} />
       <Suspense fallback={<PageFallback />}>
         <Outlet />
       </Suspense>
-      {!immersive && <DemoMode raised={/^\/(events|profile|my-photos|favorites)/.test(pathname)} />}
     </>
   )
 }
@@ -114,6 +110,7 @@ const router = createBrowserRouter([
               { path: '/profile', element: <Profile /> },
               { path: '/my-photos', element: <Profile tab="photos" /> },
               { path: '/favorites', element: <Profile tab="favorites" /> },
+              { path: '/account', element: <Profile tab="account" /> },
             ],
           },
           { path: '/events/:eventId/search', element: <Search /> },

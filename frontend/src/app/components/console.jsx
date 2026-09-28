@@ -29,7 +29,7 @@ export function AdminEventCard({ ev, to, onAssign, onArchive, onEdit, i = 0, sho
         <EventCover ev={ev} className="size-full transition-transform duration-700 group-hover:scale-[1.03]" />
         <div className="absolute inset-0 bg-gradient-to-t from-navy-950/55 to-transparent" />
         <StatusBadge status={ev.status} onDark className="absolute top-3 left-3" />
-        <span className="absolute bottom-3 left-3 text-[12px] font-medium text-white/85">{ev.type}</span>
+        <span className="absolute bottom-3 left-3 font-mono text-[12px] text-white/80">/{ev.code}</span>
       </Link>
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start gap-2">
@@ -55,22 +55,26 @@ export function AdminEventCard({ ev, to, onAssign, onArchive, onEdit, i = 0, sho
         </div>
         <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-navy-500">
           <span className="flex items-center gap-1">
-            <CalendarDays className="size-3.5" /> {fmtDate(ev.date)}
+            <CalendarDays className="size-3.5" /> {ev.date ? fmtDate(ev.date) : 'No date'}
           </span>
-          <span className="flex items-center gap-1">
-            <MapPin className="size-3.5" /> {ev.city}
-          </span>
+          {ev.location && (
+            <span className="flex min-w-0 items-center gap-1">
+              <MapPin className="size-3.5 shrink-0" /> <span className="truncate">{ev.location}</span>
+            </span>
+          )}
         </p>
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-navy-100 pt-3">
           <span className="flex gap-4 text-[13px] text-navy-600">
             <span className="flex items-center gap-1.5" title="Photos">
-              <Images className="size-3.5 text-navy-400" /> <span className="font-medium tabular-nums">{compact(ev.stats.photos)}</span>
+              <Images className="size-3.5 text-navy-400" /> <span className="font-medium tabular-nums">{compact(ev.photoCount)}</span>
             </span>
-            <span className="flex items-center gap-1.5" title="Searches">
-              <ScanSearch className="size-3.5 text-navy-400" /> <span className="font-medium tabular-nums">{compact(ev.stats.searches)}</span>
-            </span>
+            {ev.searches != null && (
+              <span className="flex items-center gap-1.5" title="Searches">
+                <ScanSearch className="size-3.5 text-navy-400" /> <span className="font-medium tabular-nums">{compact(ev.searches)}</span>
+              </span>
+            )}
           </span>
-          {showAdmins && <AvatarStack users={ev.admins} size={26} />}
+          {showAdmins && ev.admins && <AvatarStack users={ev.admins} size={26} />}
         </div>
       </div>
     </motion.article>
@@ -94,14 +98,21 @@ export function CardGridSkeleton({ n = 6 }) {
   )
 }
 
-const ACT_ICON = { search: Search, upload: Images, event: CalendarPlus, assign: UserPlus, download: Images, user: UserPlus }
+// backend action codes -> icon
+function actIcon(kind = '') {
+  if (kind.startsWith('SEARCH')) return Search
+  if (kind.startsWith('PHOTO')) return Images
+  if (kind.startsWith('EVENT')) return CalendarPlus
+  if (kind.startsWith('ADMIN') || kind.startsWith('USER') || kind === 'SIGNUP' || kind === 'PERMISSIONS_UPDATED') return UserPlus
+  return ScanSearch
+}
 
 export function ActivityFeed({ items }) {
   if (!items?.length) return <p className="py-6 text-center text-sm text-navy-400">No activity yet. It’ll show up here as guests search and admins upload.</p>
   return (
     <ul className="grid gap-4">
       {items.map((a) => {
-        const Icon = ACT_ICON[a.kind] || Search
+        const Icon = actIcon(a.kind)
         return (
           <li key={a.id} className="flex gap-3">
             <span className="grid size-8 shrink-0 place-items-center rounded-full bg-navy-50 text-navy-600 ring-1 ring-navy-100">

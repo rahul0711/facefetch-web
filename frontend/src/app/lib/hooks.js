@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { subscribe } from '../services/db'
+import { subscribe } from '../services/bus'
 
 // Load data from a (mock) service. Re-runs when deps change, and silently
 // refreshes when the mock DB changes so every screen stays in sync.

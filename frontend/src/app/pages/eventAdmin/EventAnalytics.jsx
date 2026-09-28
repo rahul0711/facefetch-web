@@ -9,14 +9,14 @@ import { EventAdminHeader, EventHeaderSkeleton, Locked, NotAssigned, useAdminEve
 export default function EAEventAnalytics() {
   const { ev, perms, loading, error, eventId } = useAdminEvent()
   useDocumentTitle(ev ? `Analytics · ${ev.name}` : 'Analytics')
-  const { data } = useQuery(() => eventAnalytics(eventId), [eventId])
+  const { data } = useQuery(() => eventAnalytics(eventId, 30), [eventId])
   if (loading) return <EventHeaderSkeleton />
-  if (error) return <NotAssigned />
+  if (error || !ev) return <NotAssigned />
 
   return (
     <div className="grid gap-6">
       <EventAdminHeader ev={ev} perms={perms} />
-      {!perms.analytics ? (
+      {!perms.canView ? (
         <Locked what="view analytics" />
       ) : !data ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">

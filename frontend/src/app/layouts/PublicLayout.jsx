@@ -130,7 +130,6 @@ export function Footer() {
             ['/#features', 'Features'],
             ['/#how', 'How it works'],
             ['/#organizers', 'For organizers'],
-            ['/lab', 'Try the live AI demo'],
           ]}
         />
         <FooterCol
@@ -152,10 +151,10 @@ export function Footer() {
       </div>
       <div className="border-t border-white/5">
         <div className="container-page flex flex-wrap items-center justify-between gap-3 py-6 text-[13px] text-navy-400">
-          <span>© 2026 Genesis Hub, Inc. Product prototype running on demo data.</span>
+          <span>© 2026 Genesis Hub, Inc.</span>
           <span>
-            Demo photography by{' '}
-            <a href="https://unsplash.com/?utm_source=facefetch_demo&utm_medium=referral" className="underline decoration-navy-600 underline-offset-2 hover:text-white" target="_blank" rel="noreferrer">
+            Photography on this page by{' '}
+            <a href="https://unsplash.com/?utm_source=genesis_hub&utm_medium=referral" className="underline decoration-navy-600 underline-offset-2 hover:text-white" target="_blank" rel="noreferrer">
               Unsplash
             </a>{' '}
             contributors.

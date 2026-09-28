@@ -1,4 +1,4 @@
-import { CalendarHeart, Heart, Images, LogOut, UserRound } from 'lucide-react'
+import { CalendarHeart, Heart, Images, LogOut, Settings, UserRound } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../auth/AuthContext'
 import Logo from '../components/ui/Logo'
@@ -45,6 +45,7 @@ export default function UserLayout() {
             items={[
               { label: 'Profile', icon: UserRound, onClick: () => navigate('/profile') },
               { label: 'Favorites', icon: Heart, onClick: () => navigate('/favorites') },
+              { label: 'Account settings', icon: Settings, onClick: () => navigate('/account') },
               '-',
               {
                 label: 'Log out',

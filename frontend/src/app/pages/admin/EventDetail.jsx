@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, CalendarDays, Clock, Download, ExternalLink, Images, MapPin, Pencil, ScanFace, ScanSearch, ShieldCheck, UserPlus, Users } from 'lucide-react'
+import { Archive, ArrowLeft, CalendarDays, Copy, Download, Hash, Images, MapPin, Pencil, ScanFace, ScanSearch, ShieldCheck, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { AssignAdminsDrawer } from '../../components/AssignAdmins'
@@ -8,11 +8,12 @@ import Photo from '../../components/Photo'
 import Button from '../../components/ui/Button'
 import { Modal, useToast } from '../../components/ui/overlay'
 import { Avatar, Badge, EmptyState, Skeleton, StatusBadge } from '../../components/ui/primitives'
-import { PERMISSIONS } from '../../data/seed'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
-import { compact, fmtDate, fmtTime, num } from '../../lib/utils'
+import { compact, copyText, fmtDate, num } from '../../lib/utils'
+import { PERMISSIONS } from '../../services/adapters'
 import { eventAnalytics } from '../../services/analyticsService'
-import { db } from '../../services/db'
+import { listPhotos } from '../../services/photoService'
+import { shareLink } from '../../services/searchService'
 import { archiveEvent, getEvent, listEventAssignments } from '../../services/eventService'
 
 export function EventDetailSkeleton() {
@@ -41,20 +42,23 @@ export function EventBanner({ ev, back, actions }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={ev.status} onDark />
-              <Badge tone="dark">{ev.type}</Badge>
+              <Badge tone="dark">
+                <Hash className="size-3" /> {ev.code}
+              </Badge>
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{ev.name}</h1>
-            <p className="mt-1 text-white/70">{ev.subtitle}</p>
+            {ev.description && <p className="mt-1 line-clamp-2 max-w-2xl text-white/70">{ev.description}</p>}
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-white/80">
-              <span className="flex items-center gap-1.5">
-                <CalendarDays className="size-4 text-cyan-300" /> {fmtDate(ev.date, { day: 'numeric', month: 'long', year: 'numeric' })}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock className="size-4 text-cyan-300" /> {fmtTime(ev.start)} – {fmtTime(ev.end)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <MapPin className="size-4 text-cyan-300" /> {[ev.venue, ev.city].filter(Boolean).join(', ')}
-              </span>
+              {ev.date && (
+                <span className="flex items-center gap-1.5">
+                  <CalendarDays className="size-4 text-cyan-300" /> {fmtDate(ev.date, { day: 'numeric', month: 'long', year: 'numeric' })}
+                </span>
+              )}
+              {ev.location && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="size-4 text-cyan-300" /> {ev.location}
+                </span>
+              )}
             </div>
           </div>
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -68,18 +72,17 @@ export default function AdminEventDetail() {
   const { eventId } = useParams()
   const toast = useToast()
   const { data: ev, loading, error } = useQuery(() => getEvent(eventId), [eventId])
-  const { data: stats } = useQuery(() => eventAnalytics(eventId), [eventId])
+  const { data: stats } = useQuery(() => eventAnalytics(eventId, 30), [eventId])
+  const { data: photos } = useQuery(() => listPhotos(eventId, { pageSize: 8 }).then((r) => r.items), [eventId])
   const { data: assignments } = useQuery(() => listEventAssignments(eventId), [eventId])
   const [assigning, setAssigning] = useState(false)
   const [archiving, setArchiving] = useState(false)
   useDocumentTitle(ev?.name)
 
   if (loading) return <EventDetailSkeleton />
-  if (error) return <EmptyState icon={ScanSearch} title="Event not found" action={<Button to="/admin/events">All events</Button>} />
+  if (error || !ev) return <EmptyState icon={ScanSearch} title="Event not found" action={<Button to="/admin/events">All events</Button>} />
 
-  const photos = db()
-    .photos.filter((p) => p.eventId === eventId)
-    .slice(0, 8)
+  const st = stats?.stats || {}
 
   return (
     <div className="grid gap-6">
@@ -100,17 +103,17 @@ export default function AdminEventDetail() {
 
       <StatStrip
         items={[
-          { label: 'Photos', value: compact(ev.stats.photos), icon: Images },
-          { label: 'Faces detected', value: compact(ev.stats.faces), icon: ScanFace },
-          { label: 'Searches', value: compact(ev.stats.searches), icon: ScanSearch },
-          { label: 'Unique visitors', value: compact(ev.stats.visitors), icon: Users },
-          { label: 'Downloads', value: compact(ev.stats.downloads), icon: Download },
+          { label: 'Photos', value: compact(st.photos ?? ev.photoCount), icon: Images },
+          { label: 'Faces detected', value: compact(st.faces ?? 0), icon: ScanFace },
+          { label: 'Searches', value: compact(st.searches ?? 0), icon: ScanSearch },
+          { label: 'Unique visitors', value: compact(st.uniqueVisitors ?? 0), icon: Users },
+          { label: 'Downloads', value: compact(st.downloads ?? 0), icon: Download },
         ]}
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Searches" description="Guest face searches for this event" className="lg:col-span-2">
-          {stats?.searches.length ? (
+          {stats?.searches.some((d) => d.value) ? (
             <AreaChart data={stats.searches} unit="Searches" height={200} />
           ) : (
             <EmptyState icon={ScanSearch} title="No searches yet" className="py-8">
@@ -131,17 +134,16 @@ export default function AdminEventDetail() {
           {assignments?.length ? (
             <ul className="grid gap-3">
               {assignments.map((a) => {
-                const u = db().users.find((x) => x.id === a.userId)
                 const n = PERMISSIONS.filter((p) => a.perms[p.key]).length
                 return (
                   <li key={a.userId} className="flex items-center gap-3">
-                    <Avatar user={u} size={36} />
+                    <Avatar user={a} size={36} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-navy-900">{u?.name}</span>
-                      <span className="block truncate text-[12px] text-navy-500">{u?.title}</span>
+                      <span className="block truncate text-sm font-medium text-navy-900">{a.name}</span>
+                      <span className="block truncate text-[12px] text-navy-500">{a.email}</span>
                     </span>
-                    <Badge tone={n === 5 ? 'brand' : 'neutral'}>
-                      <ShieldCheck className="size-3" /> {n === 5 ? 'Full access' : `${n}/5`}
+                    <Badge tone={n === PERMISSIONS.length ? 'brand' : 'neutral'}>
+                      <ShieldCheck className="size-3" /> {n === PERMISSIONS.length ? 'Full access' : PERMISSIONS.filter((p) => a.perms[p.key]).map((p) => p.short).join(' · ')}
                     </Badge>
                   </li>
                 )
@@ -160,8 +162,8 @@ export default function AdminEventDetail() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Panel title="Gallery sample" description={`${num(ev.stats.photos)} photos in this event`} className="lg:col-span-2">
-          {photos.length ? (
+        <Panel title="Gallery sample" description={`${num(st.photos ?? ev.photoCount)} photos in this event`} className="lg:col-span-2">
+          {photos?.length ? (
             <div className="grid grid-cols-4 gap-2">
               {photos.map((p) => (
                 <Photo key={p.id} photo={p} className="aspect-square rounded-lg" />
@@ -177,17 +179,25 @@ export default function AdminEventDetail() {
           {stats && <StatusStack counts={stats.processing} />}
           <dl className="mt-6 grid gap-2.5 border-t border-navy-100 pt-5 text-sm">
             <div className="flex justify-between gap-3">
-              <dt className="text-navy-500">Organizer</dt>
-              <dd className="text-right font-medium text-navy-900">{ev.organizer}</dd>
+              <dt className="text-navy-500">Created by</dt>
+              <dd className="text-right font-medium text-navy-900">{ev.createdByName || '—'}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-navy-500">Contact</dt>
-              <dd className="truncate text-right font-medium text-navy-900">{ev.contact || '—'}</dd>
+              <dt className="text-navy-500">Storage</dt>
+              <dd className="text-right font-medium text-navy-900">{st.storageBytes != null ? `${(st.storageBytes / 1048576).toFixed(1)} MB` : '—'}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-navy-500">Guest link</dt>
-              <dd className="flex items-center gap-1 truncate font-mono text-[12px] text-brand-700">
-                /e/{ev.slug} <ExternalLink className="size-3" />
+              <dd>
+                <button
+                  onClick={async () => {
+                    await copyText(shareLink(ev))
+                    toast('Guest link copied')
+                  }}
+                  className="flex items-center gap-1 font-mono text-[12px] text-brand-700 hover:underline"
+                >
+                  /events/{ev.id} <Copy className="size-3" />
+                </button>
               </dd>
             </div>
           </dl>
@@ -220,9 +230,13 @@ export default function AdminEventDetail() {
             <Button
               variant="destructive"
               onClick={async () => {
-                await archiveEvent(ev.id)
+                try {
+                  await archiveEvent(ev.eventId)
+                  toast(`${ev.name} archived`)
+                } catch (e) {
+                  toast(e.message, { tone: 'error' })
+                }
                 setArchiving(false)
-                toast(`${ev.name} archived`)
               }}
             >
               Archive

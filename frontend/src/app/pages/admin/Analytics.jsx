@@ -11,9 +11,9 @@ import { DashboardSkeleton } from './Dashboard'
 export default function AdminAnalytics() {
   useDocumentTitle('Analytics')
   const navigate = useNavigate()
-  const { data, loading } = useQuery(platformOverview, [])
   const [range, setRange] = useState('30')
-  if (loading || !data) return <DashboardSkeleton />
+  const { data } = useQuery(() => platformOverview(Number(range)), [range])
+  if (!data) return <DashboardSkeleton />
   const t = data.totals
   const n = Number(range)
 
@@ -34,17 +34,17 @@ export default function AdminAnalytics() {
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Searches over time" description={`Daily face searches, last ${n} days`}>
-          <AreaChart data={data.searches.slice(-n)} unit="Searches" />
+          <AreaChart data={data.searches} unit="Searches" />
         </Panel>
         <Panel title="Uploads over time" description={`Photos uploaded per day, last ${n} days`}>
-          <BarChart data={data.uploads.slice(-n)} unit="Photos" height={220} />
+          <BarChart data={data.uploads} unit="Photos" height={220} />
         </Panel>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Popular events" description="By total face searches">
           <BarList items={data.topEvents} onSelect={(it) => navigate(`/admin/events/${it.id}`)} />
         </Panel>
-        <Panel title="Photo processing status" description="Analysis state of gallery photos">
+        <Panel title="Photo processing status" description="Face-analysis state of all photos">
           <StatusStack counts={data.processing} />
           <p className="mt-6 rounded-xl bg-navy-50 p-4 text-[13px] leading-relaxed text-navy-600">
             Failed photos are usually too blurry or dark to find faces in. Event admins can re-analyze them from the photo manager.

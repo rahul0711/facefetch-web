@@ -11,7 +11,7 @@ import { LogoMark } from '../../components/ui/Logo'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { cn, num } from '../../lib/utils'
 import { getGuestEvent } from '../../services/eventService'
-import { FaceError, giveConsent, hasConsent, search, verifyFace } from '../../services/searchService'
+import { FaceError, giveConsent, hasConsent, search } from '../../services/searchService'
 import { EventUnavailable } from './EventDetail'
 
 const SEARCH_STEPS = (n) => [
@@ -39,6 +39,8 @@ const ERRORS = {
   no_face: { icon: ScanFace, title: 'No face detected', text: 'We couldn’t see a face. Face the camera in good, even light and try again.' },
   too_small: { icon: ScanFace, title: 'Face too small', text: 'You’re a little far away. Move closer so your face fills the oval.' },
   unreadable: { icon: TriangleAlert, title: 'We can’t read that file', text: 'Try a JPG, PNG or HEIC photo taken with your phone.' },
+  offline: { icon: TriangleAlert, title: 'Face search is offline', text: 'The face-matching engine isn’t reachable right now. Please try again in a few minutes.' },
+  not_found: { icon: Lock, title: 'This event isn’t open for search', text: 'The organizer hasn’t opened this event to guests yet, or it has been archived.' },
   failed: { icon: TriangleAlert, title: 'Search didn’t finish', text: 'Something went wrong on our side. Your photo wasn’t saved. Please try again.' },
 }
 
@@ -208,7 +210,7 @@ export default function Search() {
   const mode = params.get('mode') === 'upload' ? 'upload' : 'selfie'
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { data: ev, error: loadError, loading } = useQuery(() => getGuestEvent(eventId, user.id), [eventId, user.id], { live: false })
+  const { data: ev, error: loadError, loading } = useQuery(() => getGuestEvent(eventId), [eventId], { live: false })
   useDocumentTitle(ev ? `Find your photos · ${ev.name}` : 'Find your photos')
 
   const [step, setStep] = useState(() => (hasConsent(user.id, eventId) ? mode : 'consent'))
@@ -227,14 +229,13 @@ export default function Search() {
     async (blobs) => {
       setPreview(URL.createObjectURL(blobs[0]))
       setError(null)
-      setStep('checking')
+      setStep('searching')
+      setMsgIndex(0)
       try {
-        await verifyFace(blobs)
-        setStep('searching')
-        setMsgIndex(0)
         const started = Date.now()
-        const result = await search(eventId, user.id)
-        await new Promise((r) => setTimeout(r, Math.max(0, 3900 - (Date.now() - started))))
+        const result = await search(eventId, blobs)
+        // let the progress animation land instead of flashing past
+        await new Promise((r) => setTimeout(r, Math.max(0, 2400 - (Date.now() - started))))
         setFound(result.hits.length)
         setStep('found')
         setTimeout(() => navigate(`/events/${eventId}/results`, { replace: true, state: { fresh: true } }), result.hits.length ? 2300 : 900)
@@ -243,7 +244,7 @@ export default function Search() {
         setStep('error')
       }
     },
-    [eventId, user.id, navigate],
+    [eventId, navigate],
   )
 
   // cycle the contextual search messages
@@ -267,11 +268,11 @@ export default function Search() {
       </div>
     )
   }
-  if (loadError) return <EventUnavailable error={loadError} />
+  if (loadError || !ev) return <EventUnavailable error={loadError} />
 
   const err = error && ERRORS[error]
   const cameraProblem = ['denied', 'insecure', 'no_camera', 'busy'].includes(error)
-  const steps = SEARCH_STEPS(ev.stats.photos)
+  const steps = SEARCH_STEPS(ev.photoCount)
 
   return (
     <div className="min-h-dvh bg-navy-950 text-white">

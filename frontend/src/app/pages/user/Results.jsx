@@ -8,38 +8,30 @@ import MomentGrid from '../../components/MomentGrid'
 import ShareModal from '../../components/ShareModal'
 import Button from '../../components/ui/Button'
 import { EmptyState, Segmented, Select, Skeleton } from '../../components/ui/primitives'
-import { db } from '../../services/db'
-import { useDbVersion, useDocumentTitle, useQuery } from '../../lib/hooks'
+import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { usePhotoActions } from '../../lib/photoActions'
 import { fmtDate, timeAgo } from '../../lib/utils'
 import { getGuestEvent } from '../../services/eventService'
 import { lastSearch } from '../../services/searchService'
 import { EventUnavailable } from './EventDetail'
 
-// Resolve the last search's hits against the photo store.
-export function useMatches(eventId, userId) {
-  useDbVersion()
-  const s = lastSearch(eventId, userId)
-  const photos = db().photos
-  return {
-    search: s,
-    items: (s?.hits || [])
-      .map((h) => ({ ...h, photo: photos.find((p) => p.id === h.photoId) }))
-      .filter((h) => h.photo),
-  }
+// Latest search for this event: this session's (with face boxes) or the saved one.
+export function useMatches(eventId) {
+  const { data, loading } = useQuery(() => lastSearch(eventId), [eventId], { live: false })
+  return { search: data, items: data?.hits || [], loading }
 }
 
 const FILTERS = [
   { value: 'all', label: 'All', test: () => true },
-  { value: 'strong', label: 'Strong matches', test: (h) => h.score >= 0.85 },
-  { value: 'group', label: 'Group photos', test: (h) => h.photo.faces.length >= 3 },
-  { value: 'portrait', label: 'Portraits', test: (h) => h.photo.faces.length <= 2 },
+  { value: 'strong', label: 'Strong matches', test: (h) => h.score >= 0.6 },
+  { value: 'group', label: 'Group photos', test: (h) => h.photo.faceCount >= 3 },
+  { value: 'portrait', label: 'Portraits', test: (h) => h.photo.faceCount <= 2 },
 ]
 
 const SORTS = {
   best: (a, b) => b.score - a.score,
-  newest: (a, b) => b.photo.takenAt.localeCompare(a.photo.takenAt),
-  oldest: (a, b) => a.photo.takenAt.localeCompare(b.photo.takenAt),
+  newest: (a, b) => String(b.photo.takenAt).localeCompare(String(a.photo.takenAt)),
+  oldest: (a, b) => String(a.photo.takenAt).localeCompare(String(b.photo.takenAt)),
 }
 
 export function applyView(items, filter, sort) {
@@ -51,8 +43,9 @@ export default function Results() {
   const { eventId } = useParams()
   const { user } = useAuth()
   const fresh = useLocation().state?.fresh
-  const { data: ev, error, loading } = useQuery(() => getGuestEvent(eventId, user.id), [eventId, user.id], { live: false })
-  const { search, items } = useMatches(eventId, user.id)
+  const { data: ev, error, loading: loadingEvent } = useQuery(() => getGuestEvent(eventId), [eventId], { live: false })
+  const { search, items, loading: loadingSearch } = useMatches(eventId)
+  const loading = loadingEvent || loadingSearch
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState('best')
   const [sharing, setSharing] = useState(null) // photo | 'all'
@@ -75,7 +68,7 @@ export default function Results() {
       </div>
     )
   }
-  if (error) return <EventUnavailable error={error} />
+  if (error || !ev) return <EventUnavailable error={error} />
 
   const counts = Object.fromEntries(FILTERS.map((f) => [f.value, items.filter(f.test).length]))
   const allFav = items.length > 0 && items.every((i) => actions.isFav(i.photo.id))
@@ -98,7 +91,7 @@ export default function Results() {
             </>
           }
         >
-          None of the {ev.stats.photos.toLocaleString()} photos from {ev.name} matched. Try a clear, front-facing selfie in good light. Photographers may also still be uploading.
+          None of the {ev.photoCount.toLocaleString()} photos from {ev.name} matched. Try a clear, front-facing selfie in good light. Photographers may also still be uploading.
         </EmptyState>
       </div>
     )
@@ -123,7 +116,7 @@ export default function Results() {
             Here are the photos from {ev.name} where we found you.
           </motion.p>
           <p className="mt-1 text-sm text-navy-400">
-            {fmtDate(ev.date)} · searched {timeAgo(search.at)}
+            {ev.date && `${fmtDate(ev.date)} · `}searched {timeAgo(search.at)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2 max-sm:grid max-sm:w-full max-sm:grid-cols-[1fr_1fr_auto]">

@@ -14,12 +14,16 @@ const https = fs.existsSync(certFile) && fs.existsSync(keyFile)
   ? { cert: fs.readFileSync(certFile), key: fs.readFileSync(keyFile) }
   : undefined
 
-// Where the face-search backend (app/web/face_search_server.py) listens --
-// must match scripts/run_face_search.sh's PORT (8002 by default; 8001 on this
-// server is the separate attendance backend). The backend serves https
-// whenever data/certs exists, plain http otherwise.
-const backendScheme = https ? 'https' : 'http'
-const backend = process.env.VITE_BACKEND || `${backendScheme}://127.0.0.1:8002`
+// Two backends in development:
+//  - the C# API (genisis_Hub, `dotnet run` -> http://localhost:5044) owns all
+//    data: auth, events, photos, search, analytics, avatars (/uploads);
+//  - the Python face engine (scripts/run_face_search.sh -> port 8002) is only
+//    called directly by the /lab tool; the C# API talks to it server-side.
+// The Python server serves https whenever data/certs exists.
+const api = process.env.VITE_API || 'http://localhost:5044'
+const face = process.env.VITE_FACE_ENGINE || `${https ? 'https' : 'http'}://127.0.0.1:8002`
+
+const to = (target) => ({ target, changeOrigin: true, secure: false })
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -27,15 +31,13 @@ export default defineConfig({
   server: {
     host: true, // listen on the LAN so phones can open it
     https,
+    // Dev-time only: the browser talks to one origin, so there's no CORS.
+    // More specific paths first -- the first matching key wins.
     proxy: {
-      // Dev-time only: forwards /api/* to the FastAPI backend so the
-      // browser never needs to know its port, and there's no CORS to deal
-      // with. In production uvicorn serves the built frontend itself.
-      '/api': {
-        target: backend,
-        changeOrigin: true,
-        secure: false, // backend may use the self-signed cert
-      },
+      '/api/analyze': to(face),
+      '/api/query': to(face),
+      '/api': to(api),
+      '/uploads': to(api),
     },
   },
 })

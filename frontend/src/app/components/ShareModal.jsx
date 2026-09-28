@@ -6,11 +6,11 @@ import Photo from './Photo'
 import Button from './ui/Button'
 import { Modal } from './ui/overlay'
 
-// Mock sharing: generates a believable link; nothing is actually published.
+// Shares the event page link; whoever opens it signs in and runs their own search.
 export default function ShareModal({ open, onClose, event, photo, count }) {
   const [copied, setCopied] = useState(false)
   if (!event) return null
-  const link = shareLink(event, photo)
+  const link = shareLink(event)
   const text = photo ? `My photo from ${event.name}` : `My ${count ?? ''} photos from ${event.name}`.replace('  ', ' ')
 
   const copy = async () => {
@@ -21,7 +21,7 @@ export default function ShareModal({ open, onClose, event, photo, count }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={photo ? 'Share this photo' : 'Share your moments'} description="Anyone with the link can view it.">
+    <Modal open={open} onClose={onClose} title={photo ? 'Share this photo' : 'Share this event'} description="Share the event link. Friends sign in and find their own photos with a selfie.">
       {photo && (
         <div className="mb-5 overflow-hidden rounded-2xl ring-1 ring-navy-100">
           <Photo photo={photo} ratio={`${photo.width} / ${photo.height}`} className="max-h-72" />
@@ -64,7 +64,6 @@ export default function ShareModal({ open, onClose, event, photo, count }) {
           <Share2 className="size-5 text-navy-600" /> More
         </button>
       </div>
-      <p className="mt-4 text-[13px] text-navy-400">Demo link: sharing is simulated in this prototype.</p>
     </Modal>
   )
 }

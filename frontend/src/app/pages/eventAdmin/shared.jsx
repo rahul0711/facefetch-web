@@ -1,21 +1,22 @@
 import { CalendarDays, Lock, MapPin, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { NavLink, useParams } from 'react-router'
-import { useAuth } from '../../auth/AuthContext'
 import { EventCover } from '../../components/console'
 import Button from '../../components/ui/Button'
 import { Badge, EmptyState, Skeleton, StatusBadge } from '../../components/ui/primitives'
-import { PERMISSIONS } from '../../data/seed'
 import { useQuery } from '../../lib/hooks'
 import { cn, fmtDate } from '../../lib/utils'
-import { adminPerms, getEvent } from '../../services/eventService'
+import { PERMISSIONS } from '../../services/adapters'
+import { getEvent, myPermissions } from '../../services/eventService'
 
 // Loads an event for the signed-in event admin, enforcing assignment.
 export function useAdminEvent() {
   const { eventId } = useParams()
-  const { user } = useAuth()
-  const perms = adminPerms(user.id, eventId)
-  const q = useQuery(() => (perms ? getEvent(eventId) : Promise.reject(new Error('not-assigned'))), [eventId, !!perms])
-  return { ...q, ev: q.data, perms, eventId }
+  const q = useQuery(async () => {
+    const [ev, perms] = await Promise.all([getEvent(eventId), myPermissions(eventId)])
+    return { ev, perms }
+  }, [eventId])
+  // perms stays null while loading or when the event isn't assigned (404)
+  return { ...q, ev: q.data?.ev, perms: q.data?.perms || null, eventId }
 }
 
 export function NotAssigned() {
@@ -44,10 +45,10 @@ export function EventHeaderSkeleton() {
 }
 
 const TABS = [
-  { to: '', label: 'Overview', perm: 'view' },
-  { to: '/photos', label: 'Photos', perm: 'view' },
-  { to: '/analytics', label: 'Analytics', perm: 'analytics' },
-  { to: '/settings', label: 'Settings', perm: 'view' },
+  { to: '', label: 'Overview', perm: 'canView' },
+  { to: '/photos', label: 'Photos', perm: 'canView' },
+  { to: '/analytics', label: 'Analytics', perm: 'canView' },
+  { to: '/settings', label: 'Settings', perm: 'canManage' },
 ]
 
 export function EventAdminHeader({ ev, perms, actions }) {
@@ -61,13 +62,17 @@ export function EventAdminHeader({ ev, perms, actions }) {
             <StatusBadge status={ev.status} />
           </div>
           <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-navy-500">
-            <span>{ev.subtitle}</span>
-            <span className="flex items-center gap-1">
-              <CalendarDays className="size-3.5" /> {fmtDate(ev.date, { day: 'numeric', month: 'long', year: 'numeric' })}
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPin className="size-3.5" /> {ev.city}
-            </span>
+            <span className="font-mono text-[13px]">{ev.code}</span>
+            {ev.date && (
+              <span className="flex items-center gap-1">
+                <CalendarDays className="size-3.5" /> {fmtDate(ev.date, { day: 'numeric', month: 'long', year: 'numeric' })}
+              </span>
+            )}
+            {ev.location && (
+              <span className="flex items-center gap-1">
+                <MapPin className="size-3.5" /> {ev.location}
+              </span>
+            )}
           </p>
         </div>
         {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -103,7 +108,7 @@ export function PermissionChips({ perms, className }) {
     <span className={cn('flex items-center gap-2 pb-2 text-[12px] text-navy-500', className)} title={PERMISSIONS.map((p) => `${perms[p.key] ? '✓' : '✗'} ${p.label}`).join('\n')}>
       <ShieldCheck className="size-3.5 text-brand-600" />
       Your access:
-      <Badge tone={n === 5 ? 'brand' : 'neutral'}>{n === 5 ? 'Full access' : PERMISSIONS.filter((p) => perms[p.key]).map((p) => p.short).join(' · ')}</Badge>
+      <Badge tone={n === PERMISSIONS.length ? 'brand' : 'neutral'}>{n === PERMISSIONS.length ? 'Full access' : PERMISSIONS.filter((p) => perms[p.key]).map((p) => p.short).join(' · ')}</Badge>
     </span>
   )
 }

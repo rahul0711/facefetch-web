@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { useDocumentTitle } from '../../lib/hooks'
 import { cn } from '../../lib/utils'
 
-// Plain-language demo policies. Prototype copy, not legal advice.
+// Plain-language policies. Review with counsel before launch.
 const DOCS = {
   privacy: {
     title: 'Privacy Policy',
@@ -23,7 +23,7 @@ const DOCS = {
       ['Searching only for yourself', 'Use face search to find photos of yourself. Don’t search for other people using their photos without their permission.'],
       ['Organizer responsibilities', 'Organizers confirm they have the right to upload event photos and to offer face search to their guests.'],
       ['Downloads', 'Photos you download are for personal use unless the organizer or photographer grants other rights.'],
-      ['Prototype notice', 'This site is a product prototype running on demo data. No real accounts are created.'],
+      ['Accounts', 'Guests create their own accounts. Event admin and Super Admin accounts are created by a Super Admin.'],
     ],
   },
   consent: {

@@ -49,12 +49,12 @@ export function Badge({ tone = 'neutral', className, dot, children }) {
   )
 }
 
-const EVENT_TONE = { Draft: 'neutral', Upcoming: 'brand', Live: 'live', Completed: 'ok', Archived: 'neutral' }
+const EVENT_TONE = { Draft: 'neutral', Active: 'live', Completed: 'ok', Archived: 'neutral' }
 
 export function StatusBadge({ status, className, onDark }) {
   return (
-    <Badge tone={onDark ? 'dark' : EVENT_TONE[status]} dot={status === 'Live' ? 'pulse' : true} className={className}>
-      {status}
+    <Badge tone={onDark ? 'dark' : EVENT_TONE[status] || 'neutral'} dot={status === 'Active' ? 'pulse' : true} className={className}>
+      {status === 'Active' ? 'Live' : status}
     </Badge>
   )
 }

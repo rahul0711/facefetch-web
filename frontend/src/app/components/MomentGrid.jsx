@@ -15,7 +15,7 @@ function useColumns(items, count) {
     items.forEach((it, i) => {
       const col = cols.reduce((a, b) => (b.h < a.h ? b : a))
       col.items.push({ ...it, index: i })
-      col.h += it.photo.height / it.photo.width + 0.04
+      col.h += (it.photo.height || 3) / (it.photo.width || 4) + 0.04
     })
     return cols.map((c) => c.items)
   }, [items, count])
@@ -59,7 +59,7 @@ function MomentCard({ item, to, actions, showMatch }) {
       className="group relative"
     >
       <Link to={to} className="block overflow-hidden rounded-2xl" aria-label={`Open photo ${item.index + 1}`}>
-        <Photo photo={photo} ratio="natural" face={box} faceDelay={0.3 + Math.min(item.index, 12) * 0.05} imgClassName="transition-transform duration-700 ease-out group-hover:scale-[1.03]" />
+        <Photo photo={photo} ratio="natural" face={box || undefined} faceDelay={0.3 + Math.min(item.index, 12) * 0.05} imgClassName="transition-transform duration-700 ease-out group-hover:scale-[1.03]" />
         <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-t from-navy-950/50 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 max-md:hidden" />
       </Link>
       {showMatch && label?.tone === 'strong' && (

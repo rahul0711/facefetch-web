@@ -13,7 +13,7 @@ export default function AuthShell({ children }) {
       <div className="flex flex-col px-6 py-6 sm:px-10">
         <Logo />
         <div className="mx-auto flex w-full max-w-[400px] flex-1 flex-col justify-center py-12">{children}</div>
-        <p className="text-center text-[13px] text-navy-400">© 2026 Genesis Hub, Inc. · Prototype: accounts and data are demo only</p>
+        <p className="text-center text-[13px] text-navy-400">© 2026 Genesis Hub, Inc.</p>
       </div>
       <div className="relative hidden overflow-hidden bg-navy-950 lg:block">
         <GridBackdrop dark />
@@ -31,10 +31,10 @@ export default function AuthShell({ children }) {
           className="absolute inset-x-10 bottom-12 xl:inset-x-16"
         >
           <span className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1 text-[13px] font-medium text-cyan-200 ring-1 ring-cyan-300/25">
-            <ScanFace className="size-4" /> 24 moments found at TechFest 2026
+            <ScanFace className="size-4" /> AI face search for event photos
           </span>
-          <p className="mt-5 max-w-lg text-3xl leading-tight font-semibold text-white">“I found every photo of me from a 3,000-person fest in about five seconds.”</p>
-          <p className="mt-3 text-navy-300">Isha, guest at TechFest 2026</p>
+          <p className="mt-5 max-w-lg text-3xl leading-tight font-semibold text-white">Thousands of event photos. One selfie. Every moment you’re in.</p>
+          <p className="mt-3 text-navy-300">Your selfie is used only to search the event you choose.</p>
         </motion.div>
       </div>
     </div>

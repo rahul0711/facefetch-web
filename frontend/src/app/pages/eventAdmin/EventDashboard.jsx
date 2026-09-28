@@ -17,10 +17,11 @@ export default function EAEventDashboard() {
   const { ev, perms, loading, error, eventId } = useAdminEvent()
   useDocumentTitle(ev?.name)
   const toast = useToast()
-  const { data: photos } = useQuery(() => listPhotos(eventId), [eventId])
-  const { data: stats } = useQuery(() => eventAnalytics(eventId), [eventId])
+  const { data: photos } = useQuery(() => listPhotos(eventId, { pageSize: 10 }).then((r) => r.items), [eventId])
+  const { data: stats } = useQuery(() => eventAnalytics(eventId, 30), [eventId])
+  const st = stats?.stats
   if (loading) return <EventHeaderSkeleton />
-  if (error) return <NotAssigned />
+  if (error || !ev) return <NotAssigned />
 
   return (
     <div className="grid gap-6">
@@ -38,7 +39,7 @@ export default function EAEventDashboard() {
             >
               <Link2 /> Copy guest link
             </Button>
-            {perms.upload && (
+            {perms.canUpload && (
               <Button to={`/event-admin/events/${ev.id}/photos`}>
                 <CloudUpload /> Upload photos
               </Button>
@@ -48,11 +49,11 @@ export default function EAEventDashboard() {
       />
       <StatStrip
         items={[
-          { label: 'Photos', value: compact(ev.stats.photos), icon: Images },
-          { label: 'Faces detected', value: compact(ev.stats.faces), icon: ScanFace },
-          { label: 'Searches', value: compact(ev.stats.searches), icon: ScanSearch },
-          { label: 'Unique visitors', value: compact(ev.stats.visitors), icon: Users },
-          { label: 'Downloads', value: compact(ev.stats.downloads), icon: Download },
+          { label: 'Photos', value: compact(st?.photos ?? ev.photoCount ?? 0), icon: Images },
+          { label: 'Faces detected', value: compact(st?.faces ?? 0), icon: ScanFace },
+          { label: 'Searches', value: compact(st?.searches ?? 0), icon: ScanSearch },
+          { label: 'Unique visitors', value: compact(st?.uniqueVisitors ?? 0), icon: Users },
+          { label: 'Downloads', value: compact(st?.downloads ?? 0), icon: Download },
         ]}
       />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -76,7 +77,7 @@ export default function EAEventDashboard() {
               icon={Images}
               title="No photos yet"
               className="py-8"
-              action={perms.upload && <Button to={`/event-admin/events/${ev.id}/photos`}><CloudUpload /> Upload photos</Button>}
+              action={perms.canUpload && <Button to={`/event-admin/events/${ev.id}/photos`}><CloudUpload /> Upload photos</Button>}
             >
               Upload the event’s photos. Guests can search as soon as faces are indexed.
             </EmptyState>

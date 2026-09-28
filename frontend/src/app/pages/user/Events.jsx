@@ -6,15 +6,14 @@ import Photo from '../../components/Photo'
 import Button from '../../components/ui/Button'
 import { EmptyState, Skeleton, StatusBadge } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
-import { cn, compact, firstName, fmtDate, greeting } from '../../lib/utils'
+import { compact, firstName, fmtDate, greeting } from '../../lib/utils'
 import { listGuestEvents } from '../../services/eventService'
-import { lastSearch } from '../../services/searchService'
+import { mySearches } from '../../services/searchService'
 
-function EventCard({ ev, userId, i }) {
+function EventCard({ ev, prev, i }) {
   const navigate = useNavigate()
-  const upcoming = ev.status === 'Upcoming'
-  const prev = lastSearch(ev.id, userId)
-  const to = upcoming ? `/events/${ev.id}` : prev ? `/events/${ev.id}/results` : `/events/${ev.id}`
+  const upcoming = !ev.photoCount
+  const to = prev ? `/events/${ev.id}/results` : `/events/${ev.id}`
   return (
     <motion.article
       initial={{ opacity: 0, y: 16 }}
@@ -34,20 +33,22 @@ function EventCard({ ev, userId, i }) {
         <StatusBadge status={ev.status} onDark className="absolute top-3 left-3" />
         {prev && (
           <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-semibold text-navy-900 shadow-sm">
-            <Sparkles className="size-3.5 text-brand-600" /> {prev.hits.length} moments found
+            <Sparkles className="size-3.5 text-brand-600" /> {prev.matchCount} moments found
           </span>
         )}
         <div className="absolute inset-x-4 bottom-3 flex items-center gap-1.5 text-[13px] font-medium text-white/90">
-          <Images className="size-4" /> {ev.stats.photos ? `${compact(ev.stats.photos)} photos` : 'Photos coming soon'}
+          <Images className="size-4" /> {ev.photoCount ? `${compact(ev.photoCount)} photos` : 'Photos coming soon'}
         </div>
       </Link>
       <div className="flex flex-1 flex-col p-5">
         <h2 className="text-lg font-semibold text-navy-950">{ev.name}</h2>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-navy-500">
-          <span>{fmtDate(ev.date)}</span>
-          <span className="flex items-center gap-1">
-            <MapPin className="size-3.5" /> {ev.city}
-          </span>
+          {ev.date && <span>{fmtDate(ev.date)}</span>}
+          {ev.location && (
+            <span className="flex items-center gap-1">
+              <MapPin className="size-3.5" /> {ev.location}
+            </span>
+          )}
         </p>
         <div className="mt-5 flex items-center gap-2">
           {upcoming ? (
@@ -77,9 +78,16 @@ function EventCard({ ev, userId, i }) {
 export default function Events() {
   useDocumentTitle('Your events')
   const { user } = useAuth()
-  const { data: events, loading } = useQuery(() => listGuestEvents(user.id), [user.id])
-  const live = events?.filter((e) => e.status !== 'Upcoming') || []
-  const upcoming = events?.filter((e) => e.status === 'Upcoming') || []
+  const { data: events, loading } = useQuery(() => listGuestEvents(), [])
+  // latest successful search per event -> "N moments found"
+  const { data: searches } = useQuery(() => mySearches(), [])
+  const prevByEvent = {}
+  for (const s of searches || []) {
+    const id = String(s.eventId)
+    if (s.searchStatus === 'Completed' && s.matchCount > 0 && !prevByEvent[id]) prevByEvent[id] = s
+  }
+  const live = events?.filter((e) => e.status === 'Active') || []
+  const past = events?.filter((e) => e.status !== 'Active') || []
 
   return (
     <div className="container-page py-10 sm:py-14">
@@ -106,22 +114,26 @@ export default function Events() {
         </div>
       ) : !events?.length ? (
         <EmptyState icon={CalendarHeart} title="No events yet" className="mt-10 rounded-3xl bg-white ring-1 ring-navy-100">
-          When an organizer invites you to an event, it’ll appear here. Ask them for the event link, or check the email you signed up with.
+          Events appear here as soon as an organizer opens them for guests. Ask them for the event link.
         </EmptyState>
       ) : (
         <>
           <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {live.map((ev, i) => (
-              <EventCard key={ev.id} ev={ev} userId={user.id} i={i} />
+              <EventCard key={ev.id} ev={ev} prev={prevByEvent[ev.id]} i={i} />
             ))}
           </div>
-          {upcoming.length > 0 && (
-            <section className="mt-16">
-              <h2 className="text-lg font-semibold text-navy-950">Coming up</h2>
-              <p className="mt-1 text-sm text-navy-500">Photos will be ready to search after the event.</p>
-              <div className={cn('mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3')}>
-                {upcoming.map((ev, i) => (
-                  <EventCard key={ev.id} ev={ev} userId={user.id} i={i} />
+          {past.length > 0 && (
+            <section className={live.length ? 'mt-16' : ''}>
+              {live.length > 0 && (
+                <>
+                  <h2 className="text-lg font-semibold text-navy-950">Past events</h2>
+                  <p className="mt-1 text-sm text-navy-500">Finished events you can still search.</p>
+                </>
+              )}
+              <div className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {past.map((ev, i) => (
+                  <EventCard key={ev.id} ev={ev} prev={prevByEvent[ev.id]} i={i} />
                 ))}
               </div>
             </section>

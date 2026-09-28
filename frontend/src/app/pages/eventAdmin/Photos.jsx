@@ -6,11 +6,13 @@ import Button from '../../components/ui/Button'
 import { Modal, useToast } from '../../components/ui/overlay'
 import { Badge, Checkbox, EmptyState, Progress, Segmented, Skeleton } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
-import { cn, compact, num, timeAgo } from '../../lib/utils'
-import { deletePhotos, listPhotos, reanalyze, uploadPhotos } from '../../services/photoService'
+import { cn, fileSize, num, timeAgo } from '../../lib/utils'
+import { eventStats } from '../../services/analyticsService'
+import { deletePhotos, getPhoto, listPhotos, reanalyze, reanalyzeFailed, uploadPhotos } from '../../services/photoService'
 import { EventAdminHeader, EventHeaderSkeleton, Locked, NotAssigned, useAdminEvent } from './shared'
 
 const PAGE = 48
+const STATUS_PARAM = { all: undefined, processed: 'Completed', analyzing: 'Processing', failed: 'Failed' }
 
 function StatusOverlay({ p, onRetry }) {
   if (p.status === 'uploading')
@@ -50,7 +52,7 @@ function StatusOverlay({ p, onRetry }) {
     )
   return (
     <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-navy-950/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">
-      <ScanFace className="size-3 text-cyan-300" /> {p.faces.length} {p.faces.length === 1 ? 'face' : 'faces'}
+      <ScanFace className="size-3 text-cyan-300" /> {p.faceCount} {p.faceCount === 1 ? 'face' : 'faces'}
     </span>
   )
 }
@@ -59,79 +61,109 @@ export default function Photos() {
   const { ev, perms, loading, error, eventId } = useAdminEvent()
   useDocumentTitle(ev ? `Photos · ${ev.name}` : 'Photos')
   const toast = useToast()
-  const { data: stored, loading: loadingPhotos } = useQuery(() => listPhotos(eventId), [eventId])
-  const [live, setLive] = useState({}) // in-flight uploads, id -> record
   const [filter, setFilter] = useState('all')
+  const [limit, setLimit] = useState(PAGE)
+  const { data: page, loading: loadingPhotos } = useQuery(
+    () => listPhotos(eventId, { status: STATUS_PARAM[filter], pageSize: limit }),
+    [eventId, filter, limit],
+  )
+  const stored = page?.items
+  const { data: stats } = useQuery(() => eventStats(eventId), [eventId])
+  const [live, setLive] = useState({}) // this session's uploads, temp id -> record
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState(new Set())
   const [drag, setDrag] = useState(false)
-  const [limit, setLimit] = useState(PAGE)
   const [detail, setDetail] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [retrying, setRetrying] = useState(new Set())
-  const [engine, setEngine] = useState(null)
   const input = useRef(null)
   const dragDepth = useRef(0)
 
-  // Stored photos + in-flight uploads (in-flight wins until it lands).
+  // Stored photos, with this session's still-running uploads in front.
   const photos = useMemo(() => {
-    const byId = new Map((stored || []).map((p) => [p.id, p]))
-    const inflight = Object.values(live).filter((r) => r.status === 'uploading' || r.status === 'analyzing' || !byId.has(r.id))
-    inflight.forEach((r) => byId.delete(r.id))
-    return [...inflight.reverse(), ...byId.values()].map((p) => (retrying.has(p.id) ? { ...p, status: 'analyzing' } : p))
-  }, [stored, live, retrying])
+    const running = filter === 'all' || filter === 'analyzing' ? Object.values(live).filter((r) => r.status === 'uploading' || r.status === 'analyzing') : []
+    return [...running.reverse(), ...(stored || [])].map((p) => (retrying.has(p.id) ? { ...p, status: 'analyzing' } : p))
+  }, [stored, live, retrying, filter])
 
-  const counts = useMemo(() => {
-    const c = { all: photos.length, processed: 0, analyzing: 0, failed: 0 }
-    for (const p of photos) {
-      if (p.status === 'processed') c.processed++
-      else if (p.status === 'failed') c.failed++
-      else c.analyzing++
-    }
-    return c
-  }, [photos])
+  const counts = {
+    all: stats?.photos ?? 0,
+    processed: stats?.photosCompleted ?? 0,
+    analyzing: (stats?.photosPending ?? 0) + (stats?.photosProcessing ?? 0),
+    failed: stats?.photosFailed ?? 0,
+  }
+  const total = (page?.total ?? 0) + photos.filter((p) => typeof p.id === 'string').length
 
   const inflight = Object.values(live)
   const batchActive = inflight.some((r) => r.status === 'uploading' || r.status === 'analyzing')
-  const batchDone = inflight.filter((r) => r.status === 'processed' || r.status === 'failed').length
+  const batchDone = inflight.filter((r) => r.status === 'processed' || r.status === 'failed' || r.status === 'rejected').length
+  const rejected = inflight.filter((r) => r.status === 'rejected' || (r.status === 'failed' && !r.realId))
 
   const onFiles = useCallback(
     async (fileList) => {
-      if (!perms?.upload) return
+      if (!perms?.canUpload) return
       const files = [...fileList].filter((f) => f.type.startsWith('image/'))
       if (!files.length) {
         toast('Those files aren’t photos', { tone: 'error', description: 'Upload JPG, PNG or WEBP images.' })
         return
       }
       setFilter('all')
-      await uploadPhotos(eventId, files, (rec) => {
-        setLive((l) => ({ ...l, [rec.id]: rec }))
-        if (rec.engine) setEngine(rec.engine)
+      setLive({})
+      const res = await uploadPhotos(eventId, files, (rec) => setLive((l) => ({ ...l, [rec.id]: rec })))
+      const ok = res.filter((r) => r.status === 'processed').length
+      const bad = res.length - ok
+      toast(`${ok} of ${res.length} photo${res.length === 1 ? '' : 's'} indexed`, {
+        tone: bad ? 'info' : 'success',
+        description: bad ? `${bad} couldn’t be analyzed. See the list below.` : 'Faces are indexed and ready for guest search.',
       })
-      toast(`${files.length} photo${files.length === 1 ? '' : 's'} added`, { description: 'Faces are indexed and ready for guest search.' })
     },
     [eventId, perms, toast],
   )
 
   const retry = async (list) => {
     setRetrying((s) => new Set([...s, ...list.map((p) => p.id)]))
-    await Promise.all(list.map((p) => reanalyze(p.id)))
+    let ok = 0
+    for (const p of list) {
+      try {
+        if ((await reanalyze(eventId, p.id)).status === 'Completed') ok++
+      } catch {
+        // counted as not recovered
+      }
+    }
     setRetrying((s) => {
       const n = new Set(s)
       list.forEach((p) => n.delete(p.id))
       return n
     })
-    toast(`${list.length} photo${list.length === 1 ? '' : 's'} re-analyzed`)
+    toast(`${ok} of ${list.length} photo${list.length === 1 ? '' : 's'} analyzed`, { tone: ok === list.length ? 'success' : 'info' })
+  }
+
+  const retryAllFailed = async () => {
+    setRetrying(new Set(['*']))
+    try {
+      const r = await reanalyzeFailed(eventId)
+      toast(`${r.filter((x) => x.status === 'Completed').length} of ${r.length} failed photos recovered`)
+    } catch (e) {
+      toast(e.message, { tone: 'error' })
+    } finally {
+      setRetrying(new Set())
+    }
+  }
+
+  const openDetail = async (p) => {
+    setDetail({ ...p, loadingFaces: true })
+    try {
+      setDetail(await getPhoto(p.id))
+    } catch {
+      setDetail({ ...p, loadingFaces: false })
+    }
   }
 
   if (loading) return <EventHeaderSkeleton />
-  if (error) return <NotAssigned />
-  if (!perms.view) return <Locked what="view photos" />
+  if (error || !ev) return <NotAssigned />
+  if (!perms.canView) return <Locked what="view photos" />
 
-  const shown = photos.filter((p) =>
-    filter === 'all' ? true : filter === 'analyzing' ? p.status === 'analyzing' || p.status === 'uploading' : p.status === filter,
-  )
-  const failed = photos.filter((p) => p.status === 'failed')
+  const shown = photos
+  const canFix = perms.canUpload || perms.canManage
   const toggleSel = (id) =>
     setSelected((s) => {
       const n = new Set(s)
@@ -144,7 +176,7 @@ export default function Photos() {
     <div
       className="relative grid gap-6"
       onDragEnter={(e) => {
-        if (!perms.upload || !e.dataTransfer.types.includes('Files')) return
+        if (!perms.canUpload || !e.dataTransfer.types.includes('Files')) return
         dragDepth.current++
         setDrag(true)
       }}
@@ -152,7 +184,7 @@ export default function Photos() {
         dragDepth.current = Math.max(0, dragDepth.current - 1)
         if (!dragDepth.current) setDrag(false)
       }}
-      onDragOver={(e) => perms.upload && e.preventDefault()}
+      onDragOver={(e) => perms.canUpload && e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault()
         dragDepth.current = 0
@@ -166,12 +198,12 @@ export default function Photos() {
         perms={perms}
         actions={
           <>
-            {perms.manage && (
-              <Button variant="secondary" onClick={() => retry(failed)} disabled={!failed.length || retrying.size > 0} title={failed.length ? 'Re-run face analysis on failed photos' : 'Every photo is analyzed'}>
-                <ScanSearch /> {failed.length ? `Re-analyze ${failed.length}` : 'Analyze'}
+            {canFix && counts.failed > 0 && (
+              <Button variant="secondary" onClick={retryAllFailed} loading={retrying.has('*')} disabled={retrying.size > 0} title="Re-run face analysis on every failed photo">
+                <ScanSearch /> Re-analyze {counts.failed} failed
               </Button>
             )}
-            <Button onClick={() => input.current.click()} disabled={!perms.upload} title={perms.upload ? undefined : 'You don’t have upload access'}>
+            <Button onClick={() => input.current.click()} disabled={!perms.canUpload} title={perms.canUpload ? undefined : 'You don’t have upload access'}>
               <CloudUpload /> Upload photos
             </Button>
           </>
@@ -181,15 +213,15 @@ export default function Photos() {
       {/* stats */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {[
-          ['Photos', ev.stats.photos, Images],
-          ['Faces', ev.stats.faces, ScanFace],
-          ['Searches', ev.stats.searches, ScanSearch],
+          ['Photos', stats?.photos, Images],
+          ['Faces', stats?.faces, ScanFace],
+          ['Searches', stats?.searches, ScanSearch],
         ].map(([label, v, Icon]) => (
           <div key={label} className="rounded-2xl border border-navy-100 bg-white p-4 shadow-card sm:p-5">
             <p className="flex items-center gap-1.5 text-[13px] text-navy-500">
               <Icon className="size-3.5" /> {label}
             </p>
-            <p className="mt-1 text-2xl font-semibold text-navy-950 tabular-nums sm:text-[28px]">{num(v)}</p>
+            <p className="mt-1 text-2xl font-semibold text-navy-950 tabular-nums sm:text-[28px]">{v == null ? '—' : num(v)}</p>
           </div>
         ))}
       </div>
@@ -213,9 +245,17 @@ export default function Photos() {
                 </p>
                 <p className="text-[13px] text-navy-300">
                   {inflight.filter((r) => r.status === 'uploading').length} uploading · {inflight.filter((r) => r.status === 'analyzing').length} analyzing · {batchDone} done
-                  {engine && <> · {engine === 'facefetch' ? 'analyzed by the Genesis Hub AI engine' : 'simulated analysis (AI engine offline)'}</>}
                 </p>
                 <Progress value={batchDone / inflight.length} className="mt-3 h-1.5 bg-white/10" />
+                {!batchActive && rejected.length > 0 && (
+                  <ul className="mt-3 grid max-h-32 gap-1 overflow-y-auto text-[12px] text-red-200">
+                    {rejected.map((r) => (
+                      <li key={r.id} className="truncate">
+                        <CircleAlert className="mr-1 inline size-3" /> {r.name}: {r.error || 'not stored'}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               {!batchActive && (
                 <button onClick={() => setLive({})} className="grid size-9 place-items-center rounded-lg text-navy-300 hover:bg-white/10 hover:text-white" aria-label="Dismiss">
@@ -228,7 +268,7 @@ export default function Photos() {
       </AnimatePresence>
 
       {/* drop zone */}
-      {perms.upload && !inflight.length && (
+      {perms.canUpload && !inflight.length && (
         <button
           onClick={() => input.current.click()}
           className="group flex items-center gap-4 rounded-2xl border-2 border-dashed border-navy-200 bg-white/60 p-5 text-left transition-colors hover:border-brand-400 hover:bg-brand-50/40"
@@ -266,22 +306,22 @@ export default function Photos() {
           {selecting ? (
             <>
               <span className="text-sm text-navy-500">{selected.size} selected</span>
-              {perms.manage && (
-                <>
-                  <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => retry(photos.filter((p) => selected.has(p.id)))}>
-                    <RefreshCw /> Re-analyze
-                  </Button>
-                  <Button size="sm" variant="destructive-ghost" disabled={!selected.size} onClick={() => setConfirmDelete(true)}>
-                    <Trash2 /> Delete
-                  </Button>
-                </>
+              {canFix && (
+                <Button size="sm" variant="secondary" disabled={!selected.size} onClick={() => retry(photos.filter((p) => selected.has(p.id)))}>
+                  <RefreshCw /> Re-analyze
+                </Button>
+              )}
+              {perms.canDelete && (
+                <Button size="sm" variant="destructive-ghost" disabled={!selected.size} onClick={() => setConfirmDelete(true)}>
+                  <Trash2 /> Delete
+                </Button>
               )}
               <Button size="sm" variant="ghost" onClick={() => (setSelecting(false), setSelected(new Set()))}>
                 Done
               </Button>
             </>
           ) : (
-            perms.manage && (
+            (canFix || perms.canDelete) && (
               <Button size="sm" variant="ghost" onClick={() => setSelecting(true)} disabled={!photos.length}>
                 <CheckSquare /> Manage photos
               </Button>
@@ -300,11 +340,11 @@ export default function Photos() {
       ) : !shown.length ? (
         <EmptyState
           icon={filter === 'failed' ? Sparkles : Images}
-          title={photos.length ? (filter === 'failed' ? 'No failed photos' : 'Nothing here') : 'No photos uploaded yet'}
+          title={counts.all ? (filter === 'failed' ? 'No failed photos' : 'Nothing here') : 'No photos uploaded yet'}
           className="rounded-2xl border border-navy-100 bg-white"
-          action={!photos.length && perms.upload && <Button onClick={() => input.current.click()}><CloudUpload /> Upload the first photos</Button>}
+          action={!counts.all && perms.canUpload && <Button onClick={() => input.current.click()}><CloudUpload /> Upload the first photos</Button>}
         >
-          {photos.length
+          {counts.all
             ? filter === 'failed'
               ? 'Every photo was analyzed successfully.'
               : 'No photos match this filter.'
@@ -313,16 +353,16 @@ export default function Photos() {
       ) : (
         <>
           <p className="-mt-2 text-[13px] text-navy-500">
-            Showing {Math.min(limit, shown.length)} of {shown.length} {filter === 'all' ? 'photos in the demo gallery' : 'photos'} ({compact(ev.stats.photos)} in the full event)
+            Showing {shown.length} of {num(total)} photos
           </p>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
             <AnimatePresence initial={false}>
-              {shown.slice(0, limit).map((p) => {
+              {shown.map((p) => {
                 const sel = selected.has(p.id)
                 return (
                   <motion.li key={p.id} layout initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.25 }}>
                     <button
-                      onClick={() => (selecting ? toggleSel(p.id) : p.src && setDetail(p))}
+                      onClick={() => (selecting ? typeof p.id === 'number' && toggleSel(p.id) : typeof p.id === 'number' && openDetail(p))}
                       className={cn('group relative block aspect-square w-full overflow-hidden rounded-xl bg-navy-100 ring-2 transition', sel ? 'ring-brand-600' : 'ring-transparent')}
                       aria-label={selecting ? `Select ${p.alt}` : `Open ${p.alt}`}
                       aria-pressed={selecting ? sel : undefined}
@@ -332,7 +372,7 @@ export default function Photos() {
                       ) : (
                         <Skeleton className="size-full rounded-none" />
                       )}
-                      <StatusOverlay p={p} onRetry={perms.manage && !selecting ? (x) => retry([x]) : null} />
+                      <StatusOverlay p={p} onRetry={canFix && !selecting && typeof p.id === 'number' ? (x) => retry([x]) : null} />
                       {selecting && (
                         <span className="absolute top-2 left-2">
                           <Checkbox checked={sel} onChange={() => toggleSel(p.id)} label={`Select photo`} tabIndex={-1} />
@@ -344,7 +384,7 @@ export default function Photos() {
               })}
             </AnimatePresence>
           </ul>
-          {shown.length > limit && (
+          {page && page.total > limit && (
             <div className="flex justify-center">
               <Button variant="secondary" onClick={() => setLimit((l) => l + PAGE)}>
                 Show more photos
@@ -372,8 +412,8 @@ export default function Photos() {
         {detail && (
           <div className="grid gap-4">
             <div className="relative overflow-hidden rounded-xl bg-navy-950" style={{ aspectRatio: `${detail.width} / ${detail.height}` }}>
-              <img src={detail.src} alt={detail.alt} className="size-full object-cover" />
-              {detail.faces.map((b, i) => (
+              <img src={detail.full || detail.src} alt={detail.alt} className="size-full object-cover" />
+              {(detail.faces || []).map((b, i) => (
                 <FaceBox key={i} box={b} delay={i * 0.04} className="rounded-md border-[1.5px]" />
               ))}
             </div>
@@ -382,10 +422,12 @@ export default function Photos() {
                 {detail.status === 'failed' ? 'Analysis failed' : 'Processed'}
               </Badge>
               <Badge tone="brand">
-                <ScanFace className="size-3" /> {detail.faces.length} faces detected
+                <ScanFace className="size-3" /> {detail.faceCount} faces detected
               </Badge>
-              {detail.source === 'upload' && <Badge>Uploaded {timeAgo(detail.takenAt)}</Badge>}
-              {detail.credit && <span className="text-[13px] text-navy-400">Photo: {detail.credit.name} / Unsplash</span>}
+              <Badge>Uploaded {timeAgo(detail.takenAt)}</Badge>
+              {detail.uploadedByName && <span className="text-[13px] text-navy-500">by {detail.uploadedByName}</span>}
+              {detail.fileSize > 0 && <span className="text-[13px] text-navy-400">{fileSize(detail.fileSize)}</span>}
+              {detail.error && <p className="w-full text-[13px] text-bad">{detail.error}</p>}
             </div>
           </div>
         )}
@@ -404,7 +446,7 @@ export default function Photos() {
             <Button
               variant="destructive"
               onClick={async () => {
-                await deletePhotos([...selected])
+                await deletePhotos(eventId, [...selected])
                 toast(`${selected.size} photo${selected.size === 1 ? '' : 's'} deleted`)
                 setSelected(new Set())
                 setConfirmDelete(false)

@@ -1,6 +1,5 @@
 import { Download, Images, ScanFace, ScanSearch, Users } from 'lucide-react'
 import { useNavigate } from 'react-router'
-import { useAuth } from '../../auth/AuthContext'
 import { AreaChart, BarList, Panel, StatCard, StatusStack } from '../../components/charts'
 import { PageHeader } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
@@ -11,9 +10,8 @@ import { DashboardSkeleton } from '../admin/Dashboard'
 // Aggregate analytics across the admin's assigned events only.
 export default function EAAnalytics() {
   useDocumentTitle('Analytics')
-  const { user } = useAuth()
   const navigate = useNavigate()
-  const { data, loading } = useQuery(() => adminOverview(user.id), [user.id])
+  const { data, loading } = useQuery(() => adminOverview(30), [])
   if (loading || !data) return <DashboardSkeleton />
   const t = data.totals
   return (

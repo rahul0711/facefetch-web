@@ -448,11 +448,8 @@ function Organizers() {
             organizers and studios need.
           </SectionHeading>
           <Reveal className="mt-8 flex flex-wrap gap-3">
-            <Button to="/signup" size="lg">
-              Set up your event <ArrowRight />
-            </Button>
-            <Button to="/login" size="lg" variant="secondary">
-              See the admin demo
+            <Button to="/login" size="lg">
+              Admin login <ArrowRight />
             </Button>
           </Reveal>
         </div>
@@ -578,9 +575,6 @@ function FinalCta({ primaryTo }) {
           <div className="mt-10 flex flex-wrap justify-center gap-3">
             <Button to={primaryTo} size="xl" variant="light">
               Get Started <ArrowRight />
-            </Button>
-            <Button to="/lab" size="xl" variant="glass">
-              Try the live AI demo
             </Button>
           </div>
         </div>

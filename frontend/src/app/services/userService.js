@@ -1,67 +1,51 @@
-// Users and event admins. Mock implementation over db.js.
-import { commit, db, delay, uid } from './db'
+// Users, event admins and platform settings (SuperAdmin endpoints).
+import { api } from './api'
+import { ROLE_TO_API, toPerms, toUser } from './adapters'
+import { emitChange } from './bus'
 
-const strip = ({ password: _p, ...u }) => u
-
-// GET /users?role=
-export async function listUsers({ role } = {}) {
-  await delay()
-  const d = db()
-  return d.users
-    .filter((u) => !role || u.role === role)
-    .map((u) => ({
-      ...strip(u),
-      assignedEvents: d.assignments.filter((a) => a.userId === u.id).map((a) => a.eventId),
-      eventsJoined: (d.guestAccess[u.id] || []).length,
-      searches: Object.keys(d.searches[u.id] || {}).length,
-    }))
+export async function listUsers({ role, search } = {}) {
+  const q = new URLSearchParams()
+  if (role) q.set('role', ROLE_TO_API[role] || role)
+  if (search) q.set('search', search)
+  return (await api(`/api/admin/users?${q}`)).map(toUser)
 }
 
-// PATCH /users/:id
-export async function setUserStatus(id, status) {
-  await delay(350)
-  commit((d) => {
-    d.users.find((u) => u.id === id).status = status
+/** Every EventAdmin with the events they're assigned to (+ permissions). */
+export async function listEventAdmins() {
+  const rows = await api('/api/admin/event-admins')
+  return rows.map((r) => ({
+    ...toUser(r),
+    assignedEvents: (r.assignedEvents || []).map((a) => ({ eventId: String(a.eventId), name: a.eventName, status: a.status, perms: toPerms(a) })),
+  }))
+}
+
+/** role: 'event_admin' | 'super_admin' | 'end_user' */
+export async function createUser({ name, email, password, phone, role = 'event_admin' }) {
+  const r = await api('/api/admin/users', {
+    method: 'POST',
+    json: { fullName: name.trim(), email: email.trim(), password, phone: phone || null, roleName: ROLE_TO_API[role] },
   })
+  emitChange()
+  return r
 }
 
-// POST /admins/invite
-export async function inviteAdmin({ name, email, title }) {
-  await delay(600)
-  if (db().users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-    throw new Error('Someone with this email already has an account.')
-  }
-  const user = {
-    id: uid('u'),
-    role: 'event_admin',
-    name,
-    email,
-    title: title || 'Event Admin',
-    avatar: null,
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Invited',
-    password: 'demo123',
-  }
-  commit((d) => {
-    d.users.push(user)
-    d.activity.unshift({ id: uid('act'), kind: 'user', text: `${name} was invited as an event admin`, event: null, at: new Date().toISOString() })
-  })
-  return strip(user)
+export async function setUserActive(userId, active) {
+  await api(`/api/admin/users/${userId}/${active ? 'activate' : 'deactivate'}`, { method: 'PATCH' })
+  emitChange()
 }
 
-export async function updateProfile(id, patch) {
-  await delay(400)
-  commit((d) => Object.assign(d.users.find((u) => u.id === id), patch))
+export async function getSettings() {
+  const pick = (r, k) => r[k] ?? r[k[0].toUpperCase() + k.slice(1)]
+  return (await api('/api/admin/settings')).map((r) => ({
+    key: pick(r, 'settingKey'),
+    value: pick(r, 'settingValue') ?? '',
+    description: pick(r, 'description') || '',
+    updatedAt: pick(r, 'updatedAt'),
+    updatedByName: pick(r, 'updatedByName'),
+  }))
 }
 
-export function userStats(userId) {
-  const d = db()
-  const searches = d.searches[userId] || {}
-  return {
-    events: (d.guestAccess[userId] || []).length,
-    searched: Object.keys(searches).length,
-    found: Object.values(searches).reduce((n, s) => n + s.hits.length, 0),
-    favorites: (d.favorites[userId] || []).length,
-    downloads: d.downloads[userId] || 0,
-  }
+export async function updateSetting(key, value) {
+  await api(`/api/admin/settings/${encodeURIComponent(key)}`, { method: 'PUT', json: { settingValue: String(value) } })
+  emitChange()
 }

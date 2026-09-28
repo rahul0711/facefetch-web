@@ -17,10 +17,10 @@ import { useAuth } from '../auth/AuthContext'
 import Logo from '../components/ui/Logo'
 import { Drawer } from '../components/ui/overlay'
 import { Avatar } from '../components/ui/primitives'
-import { useDbVersion } from '../lib/hooks'
+import { useQuery } from '../lib/hooks'
 import { cn } from '../lib/utils'
 import { ROLE_LABEL } from '../services/authService'
-import { db } from '../services/db'
+import { listAdminEvents } from '../services/eventService'
 
 const NAV = {
   super_admin: [
@@ -42,17 +42,11 @@ const NAV = {
 }
 
 function Sidebar({ role, onNavigate }) {
-  useDbVersion()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const assigned =
-    role === 'event_admin'
-      ? db()
-          .assignments.filter((a) => a.userId === user.id)
-          .map((a) => db().events.find((e) => e.id === a.eventId))
-          .filter(Boolean)
-      : []
+  const { data } = useQuery(() => (role === 'event_admin' ? listAdminEvents() : Promise.resolve([])), [role])
+  const assigned = data || []
 
   return (
     <div className="flex h-full flex-col bg-navy-950 text-navy-200">
@@ -104,15 +98,16 @@ function Sidebar({ role, onNavigate }) {
                     className={() =>
                       cn(
                         'flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors',
-                        pathname.includes(ev.id) ? 'bg-white/[0.06] text-white' : 'text-navy-300 hover:text-white',
+                        pathname.startsWith(`/event-admin/events/${ev.id}`) ? 'bg-white/[0.06] text-white' : 'text-navy-300 hover:text-white',
                       )
                     }
                   >
-                    <span className={cn('size-1.5 shrink-0 rounded-full', ev.status === 'Live' ? 'bg-cyan-300' : ev.status === 'Upcoming' ? 'bg-brand-400' : 'bg-navy-500')} />
+                    <span className={cn('size-1.5 shrink-0 rounded-full', ev.status === 'Active' ? 'bg-cyan-300' : ev.status === 'Draft' ? 'bg-brand-400' : 'bg-navy-500')} />
                     <span className="truncate">{ev.name}</span>
                   </NavLink>
                 </li>
               ))}
+              {data && !assigned.length && <li className="px-3 py-2 text-[13px] text-navy-500">No events assigned yet.</li>}
             </ul>
             <p className="mt-3 px-3 text-[12px] leading-relaxed text-navy-500">You can only see events a Super Admin has assigned to you.</p>
           </div>

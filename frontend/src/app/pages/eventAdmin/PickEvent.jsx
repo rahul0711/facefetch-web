@@ -1,6 +1,5 @@
 import { ArrowRight, CalendarRange, Images } from 'lucide-react'
 import { Link, Navigate } from 'react-router'
-import { useAuth } from '../../auth/AuthContext'
 import { EventCover } from '../../components/console'
 import { EmptyState, PageHeader, Skeleton, StatusBadge } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
@@ -10,8 +9,7 @@ import { listAdminEvents } from '../../services/eventService'
 // "Photos" in the sidebar: pick which assigned event to manage.
 export default function PickEvent() {
   useDocumentTitle('Photos')
-  const { user } = useAuth()
-  const { data: events, loading } = useQuery(() => listAdminEvents(user.id), [user.id], { live: false })
+  const { data: events, loading } = useQuery(() => listAdminEvents(), [], { live: false })
   if (loading) return <Skeleton className="h-64 rounded-2xl" />
   if (events.length === 1) return <Navigate to={`/event-admin/events/${events[0].id}/photos`} replace />
   return (
@@ -29,7 +27,7 @@ export default function PickEvent() {
                     <StatusBadge status={ev.status} />
                   </span>
                   <span className="mt-0.5 flex items-center gap-1.5 text-[13px] text-navy-500">
-                    {fmtDate(ev.date)} · <Images className="size-3.5" /> {compact(ev.stats.photos)} photos
+                    {fmtDate(ev.date)} · <Images className="size-3.5" /> {compact(ev.photoCount)} photos
                   </span>
                 </span>
                 <ArrowRight className="size-4 text-navy-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />

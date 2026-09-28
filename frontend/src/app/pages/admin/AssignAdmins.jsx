@@ -1,7 +1,7 @@
 import { ShieldCheck } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router'
 import { AssignAdminsPanel } from '../../components/AssignAdmins'
-import { PERMISSIONS } from '../../data/seed'
+import { PERMISSIONS } from '../../services/adapters'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { getEvent } from '../../services/eventService'
 import { EventBanner, EventDetailSkeleton } from './EventDetail'

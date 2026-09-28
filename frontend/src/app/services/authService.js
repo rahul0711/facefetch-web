@@ -1,89 +1,63 @@
-// Mock authentication. Same shape a real API would have (login -> session
-// with a token + user), but checked against demo users in local storage.
-import { commit, db, delay, uid } from './db'
-
-const SESSION_KEY = 'genesishub.demo.session'
-
-export const DEMO_ACCOUNTS = [
-  { role: 'super_admin', label: 'Super Admin', email: 'superadmin@genesishub.demo', password: 'demo123', blurb: 'Runs the platform: events, admins, analytics' },
-  { role: 'event_admin', label: 'Event Admin', email: 'admin@genesishub.demo', password: 'demo123', blurb: 'Uploads and manages photos for assigned events' },
-  { role: 'end_user', label: 'Guest', email: 'user@genesishub.demo', password: 'demo123', blurb: 'Finds their photos with a selfie' },
-]
+// Real authentication against the C# backend (JWT).
+import { api, readSession, writeSession } from './api'
+import { toUser } from './adapters'
 
 export const ROLE_HOME = { super_admin: '/admin', event_admin: '/event-admin', end_user: '/events' }
 export const ROLE_LABEL = { super_admin: 'Super Admin', event_admin: 'Event Admin', end_user: 'Guest' }
 
-export class AuthError extends Error {}
-
-function publicUser(u) {
-  const { password: _password, ...rest } = u
-  return rest
-}
-
 export function getSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    if (!raw) return null
-    const s = JSON.parse(raw)
-    const user = db().users.find((u) => u.id === s.userId)
-    return user ? { token: s.token, user: publicUser(user) } : null
-  } catch {
-    return null
-  }
+  const s = readSession()
+  return s ? { token: s.token, user: s.user } : null
 }
 
-function start(user) {
-  const session = { token: uid('tok'), userId: user.id }
-  try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  } catch {
-    // private mode: session lasts for this tab only
-  }
-  return { token: session.token, user: publicUser(user) }
+async function startSession(loginData) {
+  const session = { token: loginData.token, expiresAt: loginData.expiresAt, user: null }
+  writeSession(session)
+  // /me gives the full profile (phone, active flag...) with the same shape everywhere
+  const me = await api('/api/auth/me')
+  session.user = toUser(me)
+  writeSession(session)
+  return { token: session.token, user: session.user }
 }
 
 export async function login(email, password) {
-  await delay(600)
-  const user = db().users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase())
-  if (!user || (user.password ?? 'demo123') !== password) {
-    throw new AuthError('That email and password don’t match. Try one of the demo accounts.')
-  }
-  if (user.status === 'Suspended') throw new AuthError('This account is suspended. Contact the event organizer.')
-  return start(user)
+  const data = await api('/api/auth/login', { method: 'POST', json: { email: email.trim(), password } })
+  return startSession(data)
 }
 
-export async function signup({ name, email, password }) {
-  await delay(700)
-  if (db().users.some((u) => u.email.toLowerCase() === email.trim().toLowerCase())) {
-    throw new AuthError('An account with this email already exists. Log in instead.')
-  }
-  const user = {
-    id: uid('u'),
-    role: 'end_user',
-    name: name.trim(),
-    email: email.trim(),
-    password,
-    avatar: null,
-    joined: new Date().toISOString().slice(0, 10),
-    status: 'Active',
-  }
-  commit((d) => {
-    d.users.push(user)
-    // New guests get the two public demo events so the flow has something to show.
-    d.guestAccess[user.id] = ['evt-wedding', 'evt-techfest', 'evt-summit']
-  })
-  return start(user)
+export async function signup({ name, email, password, phone }) {
+  await api('/api/auth/signup', { method: 'POST', json: { fullName: name.trim(), email: email.trim(), password, phone: phone || null } })
+  return login(email, password)
 }
 
-// Demo Mode: jump straight into a role without typing credentials.
-export async function loginAsRole(role) {
-  const acct = DEMO_ACCOUNTS.find((a) => a.role === role)
-  return login(acct.email, acct.password)
+export async function refreshMe() {
+  const s = readSession()
+  if (!s) return null
+  const user = toUser(await api('/api/auth/me'))
+  writeSession({ ...s, user })
+  return user
+}
+
+export async function updateProfile({ name, phone }) {
+  await api('/api/auth/me', { method: 'PUT', json: { fullName: name, phone: phone || null } })
+  return refreshMe()
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  await api('/api/auth/change-password', { method: 'POST', json: { currentPassword, newPassword } })
+}
+
+export async function uploadAvatar(file) {
+  const form = new FormData()
+  form.append('file', file)
+  await api('/api/auth/upload-avatar', { method: 'POST', form })
+  return refreshMe()
 }
 
 export function logout() {
+  writeSession(null)
   try {
-    localStorage.removeItem(SESSION_KEY)
+    sessionStorage.clear()
   } catch {
     // ignore
   }

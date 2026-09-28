@@ -7,6 +7,10 @@ import { cn } from '../../lib/utils'
 // Focus trap + Escape + scroll lock shared by Modal and Drawer.
 function useDialog(open, onClose) {
   const ref = useRef(null)
+  // Latest onClose without re-running the effect: callers often pass a new
+  // function each render, and re-running would steal focus while typing.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
   useEffect(() => {
     if (!open) return
     const prev = document.activeElement
@@ -17,7 +21,7 @@ function useDialog(open, onClose) {
       el?.focus()
     }, 30)
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') closeRef.current()
       if (e.key !== 'Tab' || !ref.current) return
       const f = [...ref.current.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select, textarea, [tabindex="0"]')]
       if (!f.length) return
@@ -36,7 +40,7 @@ function useDialog(open, onClose) {
       document.body.style.overflow = prevOverflow
       prev?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
   return ref
 }
 

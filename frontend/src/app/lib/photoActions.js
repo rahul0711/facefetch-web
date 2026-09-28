@@ -1,14 +1,11 @@
 import { useCallback, useState } from 'react'
-import { buildZip, saveBlob } from '../../facefetch/library'
+import { downloadFile } from '../services/api'
 import { useToast } from '../components/ui/overlay'
-import { favorites, recordDownload, setFavorites, toggleFavorite } from '../services/searchService'
+import { favorites, setFavorites, toggleFavorite } from '../services/searchService'
 import { useDbVersion } from './hooks'
-import { downloadUrl } from './utils'
 
-const fileName = (photo, eventName) =>
-  `${(eventName || 'genesis-hub').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${photo.id.split('__').pop().slice(0, 10)}.jpg`
-
-// Favorite / download / share actions shared by results, viewer and profile.
+// Favorite / download actions shared by results, viewer and profile.
+// Downloads go through the backend so they're authorised and logged.
 export function usePhotoActions(user) {
   useDbVersion() // re-render when favorites change
   const toast = useToast()
@@ -34,37 +31,32 @@ export function usePhotoActions(user) {
   )
 
   const download = useCallback(
-    async (photo, eventName) => {
+    async (photo) => {
       toast('Downloading…', { tone: 'info', duration: 1200 })
-      const ok = await downloadUrl(photo.src, fileName(photo, eventName))
-      if (ok) {
-        recordDownload(user.id)
+      try {
+        await downloadFile(`/api/photos/${photo.id}/download`)
         toast('Photo saved', { description: 'Check your downloads folder.' })
-      } else toast('Download failed. Please try again.', { tone: 'error' })
+      } catch (e) {
+        toast(e.message || 'Download failed. Please try again.', { tone: 'error' })
+      }
     },
-    [user.id, toast],
+    [toast],
   )
 
   const downloadAll = useCallback(
-    async (photos, eventName) => {
+    async (photos) => {
       setZipping(true)
       toast(`Preparing ${photos.length} photos…`, { tone: 'info' })
       try {
-        const files = []
-        for (const p of photos) {
-          const blob = await (await fetch(p.src)).blob()
-          files.push({ name: fileName(p, eventName), blob })
-        }
-        saveBlob(await buildZip(files), `${fileName({ id: 'moments' }, eventName).replace('.jpg', '')}.zip`)
-        recordDownload(user.id, photos.length)
+        await downloadFile('/api/photos/download-zip', { method: 'POST', json: { photoIds: photos.map((p) => p.id) } })
         toast(`${photos.length} photos downloaded`, { description: 'Saved as a single zip file.' })
-      } catch {
-        toast('Download failed. Please try again.', { tone: 'error' })
+      } catch (e) {
+        toast(e.message || 'Download failed. Please try again.', { tone: 'error' })
       } finally {
         setZipping(false)
       }
     },
-    [user.id, toast],
+    [toast],
   )
 
   return { isFav, toggleFav, favAll, download, downloadAll, zipping }

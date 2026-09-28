@@ -1,43 +1,22 @@
-import { ArrowLeft, CalendarDays, Check, ImagePlus, MapPin, Upload, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Hash, MapPin, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import Photo from '../../components/Photo'
 import Button from '../../components/ui/Button'
 import { useToast } from '../../components/ui/overlay'
 import { Field, Input, PageHeader, Select, Skeleton, StatusBadge, Textarea } from '../../components/ui/primitives'
-import { pool } from '../../data/gallery'
-import { EVENT_STATUSES, EVENT_TYPES } from '../../data/seed'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
-import { cn, fmtDate, fmtTime } from '../../lib/utils'
-import { createEvent, getEvent, slugify, updateEvent } from '../../services/eventService'
+import { fmtDate } from '../../lib/utils'
+import { EVENT_STATUSES } from '../../services/adapters'
+import { createEvent, getEvent, slugify, updateEvent, uploadCover } from '../../services/eventService'
 
-const EMPTY = {
-  name: '',
-  slug: '',
-  type: 'Wedding',
-  date: '',
-  start: '18:00',
-  end: '23:00',
-  venue: '',
-  city: '',
-  description: '',
-  cover: null,
-  logo: null,
-  organizer: '',
-  contact: '',
-  status: 'Draft',
-}
+const EMPTY = { name: '', code: '', date: '', location: '', description: '', status: 'Draft' }
 
-const SAMPLE_COVERS = ['wedding', 'summit', 'collegefest', 'party', 'music', 'sports'].map((p) => pool(p).find((x) => x.width > x.height)?.src).filter(Boolean)
-
-async function fileToDataUrl(file, max) {
-  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' })
-  const s = Math.min(1, max / Math.max(bmp.width, bmp.height))
-  const c = document.createElement('canvas')
-  c.width = Math.round(bmp.width * s)
-  c.height = Math.round(bmp.height * s)
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height)
-  return c.toDataURL('image/jpeg', 0.8)
+const STATUS_HINT = {
+  Draft: 'Only admins can see drafts. Upload photos first, then make it Active.',
+  Active: 'Guests can open the event and search for their photos.',
+  Completed: 'Still searchable by guests; marked as finished.',
+  Archived: 'Hidden from guests. Photos and analytics are kept.',
 }
 
 function Section({ title, description, children }) {
@@ -60,23 +39,25 @@ export default function EventForm() {
   const toast = useToast()
   const { data: existing, loading } = useQuery(() => (editing ? getEvent(eventId) : Promise.resolve(null)), [eventId], { live: false })
   const [form, setForm] = useState(EMPTY)
-  const [slugTouched, setSlugTouched] = useState(false)
+  const [codeTouched, setCodeTouched] = useState(false)
+  const [cover, setCover] = useState(null) // { file, url } picked locally
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
   const coverInput = useRef(null)
-  const logoInput = useRef(null)
 
   useEffect(() => {
     if (existing) {
-      setForm({ ...EMPTY, ...existing })
-      setSlugTouched(true)
+      setForm({ name: existing.name, code: existing.code, date: existing.date || '', location: existing.location, description: existing.description, status: existing.status })
+      setCodeTouched(true)
     }
   }, [existing])
+
+  useEffect(() => () => cover && URL.revokeObjectURL(cover.url), [cover])
 
   const set = (k, v) => {
     setForm((f) => {
       const next = { ...f, [k]: v }
-      if (k === 'name' && !slugTouched) next.slug = slugify(v)
+      if (k === 'name' && !codeTouched) next.code = slugify(v)
       return next
     })
     setErrors((e) => ({ ...e, [k]: undefined }))
@@ -86,12 +67,7 @@ export default function EventForm() {
   const validate = () => {
     const e = {}
     if (form.name.trim().length < 3) e.name = 'Give the event a name (3+ characters).'
-    if (!/^[a-z0-9-]{3,}$/.test(form.slug)) e.slug = 'Use lowercase letters, numbers and dashes.'
-    if (!form.date) e.date = 'Pick the event date.'
-    if (form.start && form.end && form.end <= form.start && form.end !== '00:00') e.end = 'End time should be after the start.'
-    if (!form.city.trim()) e.city = 'Where is it happening?'
-    if (!form.organizer.trim()) e.organizer = 'Who is organizing it?'
-    if (form.contact && !/^\S+@\S+\.\S+$|^[+\d][\d\s-]{6,}$/.test(form.contact)) e.contact = 'Enter an email or phone number.'
+    if (!editing && !/^[a-zA-Z0-9-]{3,100}$/.test(form.code)) e.code = 'Use 3+ letters, numbers and dashes.'
     setErrors(e)
     return !Object.keys(e).length
   }
@@ -104,16 +80,20 @@ export default function EventForm() {
     }
     setSaving(true)
     try {
-      const data = { ...form, subtitle: form.subtitle || form.type }
-      delete data.admins
-      delete data.sampleCount
-      const ev = editing ? await updateEvent(eventId, data) : await createEvent(data)
+      const ev = editing ? await updateEvent(eventId, form) : await createEvent(form)
+      if (cover) {
+        try {
+          await uploadCover(ev.eventId, cover.file)
+        } catch (err) {
+          toast('Event saved, but the cover didn’t upload', { tone: 'error', description: err.message })
+        }
+      }
       toast(editing ? 'Changes saved' : 'Event created', {
         description: editing ? undefined : 'Next, assign an event admin to start uploading photos.',
       })
       navigate(editing ? `/admin/events/${eventId}` : `/admin/events/${ev.id}/admins`)
     } catch (err) {
-      setErrors({ slug: err.message })
+      setErrors({ [/code/i.test(err.message) ? 'code' : 'name']: err.message })
       setSaving(false)
     }
   }
@@ -127,7 +107,7 @@ export default function EventForm() {
     )
   }
 
-  const preview = { ...form, cover: form.cover }
+  const previewCover = cover?.url || existing?.cover
 
   return (
     <form onSubmit={submit} noValidate className="grid gap-6">
@@ -145,131 +125,72 @@ export default function EventForm() {
             <Field label="Event name" htmlFor="name" error={errors.name}>
               <Input {...bind('name')} placeholder="Sarah & Arjun Wedding" />
             </Field>
-            <Field label="Event URL" htmlFor="slug" error={errors.slug} hint="Guests use this link to find the event.">
-              <div className="flex overflow-hidden rounded-[10px] border border-navy-200 shadow-card focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15">
-                <span className="flex items-center border-r border-navy-200 bg-navy-50 px-3 text-sm text-navy-500">genesishub.app/e/</span>
-                <input
-                  {...bind('slug')}
-                  onChange={(e) => {
-                    setSlugTouched(true)
-                    set('slug', slugify(e.target.value))
-                  }}
-                  className="h-11 min-w-0 flex-1 px-3 text-[15px] outline-none"
-                  placeholder="sarah-arjun-wedding"
-                />
-              </div>
+            <Field label="Event code" htmlFor="code" error={errors.code} hint={editing ? 'The code can’t be changed after the event is created.' : 'A unique short code for this event.'}>
+              <Input
+                {...bind('code')}
+                icon={Hash}
+                disabled={editing}
+                onChange={(e) => {
+                  setCodeTouched(true)
+                  set('code', slugify(e.target.value))
+                }}
+                placeholder="sarah-arjun-wedding"
+              />
             </Field>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Event type" htmlFor="type">
-                <Select {...bind('type')}>
-                  {EVENT_TYPES.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Status" htmlFor="status" hint={form.status === 'Live' ? 'Guests can search as soon as photos are uploaded.' : form.status === 'Draft' ? 'Only admins can see drafts.' : undefined}>
-                <Select {...bind('status')}>
-                  {EVENT_STATUSES.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
+            <Field label="Status" htmlFor="status" hint={STATUS_HINT[form.status]}>
+              <Select {...bind('status')}>
+                {EVENT_STATUSES.map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </Select>
+            </Field>
             <Field label="Description" htmlFor="description" optional>
               <Textarea {...bind('description')} placeholder="A short note guests see on the event page." />
             </Field>
           </Section>
 
           <Section title="Date & place">
-            <div className="grid gap-5 sm:grid-cols-3">
-              <Field label="Date" htmlFor="date" error={errors.date}>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Date" htmlFor="date" optional>
                 <Input type="date" {...bind('date')} />
               </Field>
-              <Field label="Start time" htmlFor="start">
-                <Input type="time" {...bind('start')} />
-              </Field>
-              <Field label="End time" htmlFor="end" error={errors.end}>
-                <Input type="time" {...bind('end')} />
-              </Field>
-            </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Venue" htmlFor="venue" optional>
-                <Input {...bind('venue')} placeholder="The Taj Mahal Palace" />
-              </Field>
-              <Field label="City" htmlFor="city" error={errors.city}>
-                <Input {...bind('city')} placeholder="Mumbai" icon={MapPin} />
+              <Field label="Location" htmlFor="location" optional>
+                <Input {...bind('location')} placeholder="The Taj Mahal Palace, Mumbai" icon={MapPin} />
               </Field>
             </div>
           </Section>
 
-          <Section title="Branding" description="A great cover photo makes the event page feel like the event.">
-            <div>
-              <span className="text-sm font-medium text-navy-800">Cover image</span>
-              <input
-                ref={coverInput}
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={async (e) => e.target.files[0] && set('cover', await fileToDataUrl(e.target.files[0], 1400))}
-              />
-              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-7">
-                <button
-                  type="button"
-                  onClick={() => coverInput.current.click()}
-                  className="grid aspect-[4/3] place-items-center rounded-lg border-2 border-dashed border-navy-200 text-navy-500 hover:border-brand-400 hover:text-brand-700"
-                  aria-label="Upload cover image"
-                >
-                  <Upload className="size-5" />
-                </button>
-                {[...(form.cover && !SAMPLE_COVERS.includes(form.cover) ? [form.cover] : []), ...SAMPLE_COVERS].map((src) => (
-                  <button
-                    type="button"
-                    key={src.slice(0, 80)}
-                    onClick={() => set('cover', src)}
-                    className={cn('relative aspect-[4/3] overflow-hidden rounded-lg ring-2 transition', form.cover === src ? 'ring-brand-600' : 'ring-transparent hover:ring-navy-200')}
-                    aria-label="Use this cover"
-                    aria-pressed={form.cover === src}
-                  >
-                    <img src={src} alt="" className="size-full object-cover" />
-                    {form.cover === src && (
-                      <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-brand-600 text-white">
-                        <Check className="size-3" strokeWidth={3} />
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <input ref={logoInput} type="file" accept="image/*" hidden onChange={async (e) => e.target.files[0] && set('logo', await fileToDataUrl(e.target.files[0], 256))} />
-              <span className="grid size-16 place-items-center overflow-hidden rounded-xl border border-navy-200 bg-navy-50 text-navy-400">
-                {form.logo ? <img src={form.logo} alt="Event logo" className="size-full object-cover" /> : <ImagePlus className="size-5" />}
-              </span>
-              <div>
-                <p className="text-sm font-medium text-navy-800">Event logo</p>
-                <p className="text-[13px] text-navy-500">Square PNG or JPG. Shown on the guest event page.</p>
-                <div className="mt-2 flex gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => logoInput.current.click()}>
-                    {form.logo ? 'Replace' : 'Upload logo'}
+          <Section title="Cover image" description="A great cover photo makes the event page feel like the event.">
+            <input
+              ref={coverInput}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) setCover({ file: f, url: URL.createObjectURL(f) })
+                e.target.value = ''
+              }}
+            />
+            <div className="flex flex-wrap items-center gap-4">
+              <button
+                type="button"
+                onClick={() => coverInput.current.click()}
+                className="relative grid aspect-[16/10] w-48 place-items-center overflow-hidden rounded-xl border-2 border-dashed border-navy-200 text-navy-500 hover:border-brand-400 hover:text-brand-700"
+                aria-label="Choose cover image"
+              >
+                {previewCover ? <img src={previewCover} alt="" className="absolute inset-0 size-full object-cover" /> : <Upload className="size-6" />}
+              </button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => coverInput.current.click()}>
+                  {previewCover ? 'Replace' : 'Upload cover'}
+                </Button>
+                {cover && (
+                  <Button size="sm" variant="ghost" onClick={() => setCover(null)}>
+                    <X /> Undo
                   </Button>
-                  {form.logo && (
-                    <Button size="sm" variant="ghost" onClick={() => set('logo', null)}>
-                      <X /> Remove
-                    </Button>
-                  )}
-                </div>
+                )}
               </div>
-            </div>
-          </Section>
-
-          <Section title="Organizer">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Organizer name" htmlFor="organizer" error={errors.organizer}>
-                <Input {...bind('organizer')} placeholder="Kapoor & Co. Weddings" />
-              </Field>
-              <Field label="Organizer contact" htmlFor="contact" error={errors.contact} optional>
-                <Input {...bind('contact')} placeholder="hello@example.com" />
-              </Field>
             </div>
           </Section>
         </div>
@@ -279,21 +200,21 @@ export default function EventForm() {
           <p className="text-[13px] font-medium text-navy-500">Guest preview</p>
           <div className="overflow-hidden rounded-3xl bg-white shadow-lift ring-1 ring-navy-100">
             <div className="relative aspect-[16/10] bg-gradient-to-br from-navy-800 to-brand-800">
-              {preview.cover && <Photo photo={{ src: preview.cover }} className="absolute inset-0" />}
+              {previewCover && <Photo photo={{ src: previewCover }} className="absolute inset-0" />}
               <div className="absolute inset-0 bg-gradient-to-t from-navy-950/70 to-transparent" />
               <StatusBadge status={form.status} onDark className="absolute top-3 left-3" />
-              {form.logo && <img src={form.logo} alt="" className="absolute top-3 right-3 size-10 rounded-lg object-cover ring-2 ring-white" />}
             </div>
             <div className="p-5">
               <h3 className="text-lg font-semibold text-navy-950">{form.name || 'Your event name'}</h3>
               <p className="mt-1 flex flex-wrap gap-x-3 text-sm text-navy-500">
                 <span className="flex items-center gap-1">
                   <CalendarDays className="size-3.5" /> {form.date ? fmtDate(form.date) : 'Date'}
-                  {form.start && ` · ${fmtTime(form.start)}`}
                 </span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="size-3.5" /> {form.city || 'City'}
-                </span>
+                {form.location && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="size-3.5" /> {form.location}
+                  </span>
+                )}
               </p>
               <span className="mt-4 flex h-10 items-center justify-center rounded-[10px] bg-brand-600 text-sm font-medium text-white">Find My Photos</span>
             </div>

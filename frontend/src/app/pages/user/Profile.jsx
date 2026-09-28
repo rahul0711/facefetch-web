@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarHeart, Download, Heart, Images, LogOut, ScanFace, Trash2 } from 'lucide-react'
+import { ArrowRight, CalendarHeart, Heart, Images, LogOut, ScanFace, ScanSearch, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/AuthContext'
@@ -11,15 +11,16 @@ import { Avatar, EmptyState, Segmented, Skeleton } from '../../components/ui/pri
 import { useDbVersion, useDocumentTitle, useQuery } from '../../lib/hooks'
 import { usePhotoActions } from '../../lib/photoActions'
 import { fmtDate } from '../../lib/utils'
-import { db } from '../../services/db'
 import { listGuestEvents } from '../../services/eventService'
-import { clearHistory, favorites, lastSearch, myMatches } from '../../services/searchService'
-import { userStats } from '../../services/userService'
+import { getPhoto } from '../../services/photoService'
+import { clearHistory, favorites, myPhotos, mySearches } from '../../services/searchService'
+import { PasswordCard, ProfileCard } from '../shared/Settings'
 
 const TABS = [
   { value: 'events', label: 'My Events', path: '/profile' },
   { value: 'photos', label: 'My Photos', path: '/my-photos' },
   { value: 'favorites', label: 'Favorites', path: '/favorites' },
+  { value: 'account', label: 'Account', path: '/account' },
 ]
 
 export default function Profile({ tab = 'events' }) {
@@ -27,26 +28,40 @@ export default function Profile({ tab = 'events' }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const actions = usePhotoActions(user)
-  const stats = userStats(user.id)
-  const { data: events, loading } = useQuery(() => listGuestEvents(user.id), [user.id])
+  const { data: events, loading } = useQuery(() => listGuestEvents(), [])
+  const { data: searches } = useQuery(() => mySearches(), [])
+  const { data: found } = useQuery(() => myPhotos(), [])
   const [sharing, setSharing] = useState(null)
   const [confirmClear, setConfirmClear] = useState(false)
   useDocumentTitle(TABS.find((t) => t.value === tab).label)
 
-  const matches = myMatches(user.id).sort((a, b) => b.score - a.score)
+  const matches = [...(found || [])].sort((a, b) => b.score - a.score)
   const favIds = favorites(user.id)
   const byId = Object.fromEntries(matches.map((m) => [m.photo.id, m]))
-  // Favorites outlive search history: fall back to the bare photo.
+  // Favorites outlive search history: load those photos on their own.
+  const missing = favIds.filter((id) => !byId[id])
+  const { data: extraFavs } = useQuery(
+    () => (tab === 'favorites' && found && missing.length ? Promise.all(missing.map((id) => getPhoto(id).catch(() => null))) : Promise.resolve([])),
+    [tab, !!found, missing.join(',')],
+    { live: false },
+  )
   const favItems = favIds
-    .map((id) => byId[id] || (db().photos.find((p) => p.id === id) && { photo: db().photos.find((p) => p.id === id), score: null, box: null }))
+    .map((id) => byId[id] || ((p) => p && { photo: p, score: null, box: null })((extraFavs || []).find((p) => p?.id === id)))
     .filter(Boolean)
-  const shareEvent = sharing && db().events.find((e) => e.id === sharing.eventId)
+  const shareEvent = sharing && events?.find((e) => e.eventId === sharing.eventId)
+
+  // latest successful search per event
+  const lastByEvent = {}
+  for (const s of searches || []) {
+    const id = String(s.eventId)
+    if (s.searchStatus === 'Completed' && !lastByEvent[id]) lastByEvent[id] = s
+  }
 
   const cells = [
-    { icon: CalendarHeart, label: 'Events', value: stats.events },
-    { icon: ScanFace, label: 'Photos found', value: stats.found },
-    { icon: Heart, label: 'Favorites', value: stats.favorites },
-    { icon: Download, label: 'Downloads', value: stats.downloads },
+    { icon: CalendarHeart, label: 'Events searched', value: Object.keys(lastByEvent).length },
+    { icon: ScanFace, label: 'Photos found', value: matches.length },
+    { icon: Heart, label: 'Favorites', value: favIds.length },
+    { icon: ScanSearch, label: 'Searches', value: searches?.length ?? 0 },
   ]
 
   return (
@@ -102,23 +117,22 @@ export default function Profile({ tab = 'events' }) {
             </div>
           ) : (
             <ul className="grid gap-3">
+              {!events.length && <li className="py-10 text-center text-navy-500">No events are open for guests right now.</li>}
               {events.map((ev) => {
-                const s = lastSearch(ev.id, user.id)
+                const s = lastByEvent[ev.id]
                 return (
                   <li key={ev.id}>
                     <Link to={s ? `/events/${ev.id}/results` : `/events/${ev.id}`} className="group flex items-center gap-4 rounded-2xl bg-white p-3 ring-1 ring-navy-100 transition-shadow hover:shadow-lift sm:p-4">
                       <EventCover ev={ev} className="size-16 shrink-0 rounded-xl sm:size-20" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold text-navy-950">{ev.name}</span>
-                        <span className="block text-sm text-navy-500">
-                          {fmtDate(ev.date)} · {ev.city}
-                        </span>
+                        <span className="block text-sm text-navy-500">{[ev.date && fmtDate(ev.date), ev.location].filter(Boolean).join(' · ')}</span>
                       </span>
                       <span className="text-right text-sm">
                         {s ? (
-                          <span className="font-semibold text-brand-700">{s.hits.length} moments</span>
-                        ) : ev.status === 'Upcoming' ? (
-                          <span className="text-navy-400">Upcoming</span>
+                          <span className="font-semibold text-brand-700">{s.matchCount} moments</span>
+                        ) : !ev.photoCount ? (
+                          <span className="text-navy-400">Photos coming soon</span>
                         ) : (
                           <span className="font-medium text-navy-500">Not searched yet</span>
                         )}
@@ -131,8 +145,17 @@ export default function Profile({ tab = 'events' }) {
             </ul>
           ))}
 
+        {tab === 'account' && (
+          <div className="grid gap-6">
+            <ProfileCard />
+            <PasswordCard />
+          </div>
+        )}
+
         {tab === 'photos' &&
-          (matches.length ? (
+          (!found ? (
+            <Skeleton className="h-64 rounded-3xl" />
+          ) : matches.length ? (
             <MomentGrid
               items={matches}
               actions={{ ...actions, onShare: setSharing }}
@@ -172,8 +195,8 @@ export default function Profile({ tab = 'events' }) {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                clearHistory(user.id)
+              onClick={async () => {
+                await clearHistory()
                 setConfirmClear(false)
               }}
             >

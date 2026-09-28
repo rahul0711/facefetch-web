@@ -1,6 +1,5 @@
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { TODAY } from '../data/seed'
 
 export const cn = (...args) => twMerge(clsx(args))
 
@@ -27,10 +26,9 @@ export function fmtTime(hhmm) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-// "now" is the demo's fixed date so relative times stay sensible.
 export function timeAgo(iso) {
-  const now = Math.max(Date.now(), TODAY.getTime())
-  const s = Math.round((now - new Date(iso).getTime()) / 1000)
+  if (!iso) return ''
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
   if (s < 60) return 'just now'
   const m = Math.round(s / 60)
   if (m < 60) return `${m}m ago`
@@ -96,4 +94,11 @@ export async function downloadUrl(url, filename) {
   } catch {
     return false
   }
+}
+
+export function fileSize(bytes) {
+  if (!bytes) return '0 MB'
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`
 }

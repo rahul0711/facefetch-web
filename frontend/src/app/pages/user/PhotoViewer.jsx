@@ -7,10 +7,11 @@ import { HeartButton } from '../../components/MomentGrid'
 import { FaceBox } from '../../components/Photo'
 import ShareModal from '../../components/ShareModal'
 import { Kbd } from '../../components/ui/primitives'
-import { useDocumentTitle } from '../../lib/hooks'
+import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { usePhotoActions } from '../../lib/photoActions'
 import { cn } from '../../lib/utils'
-import { db } from '../../services/db'
+import { getGuestEvent } from '../../services/eventService'
+import { getPhoto } from '../../services/photoService'
 import { matchLabel } from '../../services/searchService'
 import { applyView, useMatches } from './Results'
 
@@ -20,18 +21,23 @@ export default function PhotoViewer() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const actions = usePhotoActions(user)
-  const { items } = useMatches(eventId, user.id)
-  const ev = db().events.find((e) => e.id === eventId)
-  const allowed = (db().guestAccess[user.id] || []).includes(eventId)
+  const { items, loading: loadingMatches } = useMatches(eventId)
+  const { data: ev, loading: loadingEvent, error } = useQuery(() => getGuestEvent(eventId), [eventId], { live: false })
+  const inResults = items.some((i) => String(i.photo.id) === photoId)
+  // e.g. a favorite from an older search: load it on its own (the backend
+  // only serves photos this guest was matched in)
+  const { data: lone, loading: loadingLone } = useQuery(
+    () => (loadingMatches || inResults ? Promise.resolve(null) : getPhoto(photoId).catch(() => null)),
+    [photoId, loadingMatches, inResults],
+    { live: false },
+  )
 
   const list = useMemo(() => {
     const view = applyView(items, params.get('filter') || 'all', params.get('sort') || 'best')
-    if (view.some((i) => i.photo.id === photoId)) return view
-    // e.g. a favorite whose search history was cleared: show it on its own
-    const lone = db().photos.find((p) => p.id === photoId && p.eventId === eventId)
+    if (view.some((i) => String(i.photo.id) === photoId)) return view
     return lone ? [{ photo: lone, score: null, box: null }] : view
-  }, [items, params, photoId, eventId])
-  const index = list.findIndex((i) => i.photo.id === photoId)
+  }, [items, params, photoId, lone])
+  const index = list.findIndex((i) => String(i.photo.id) === photoId)
   const item = list[index]
   const [dir, setDir] = useState(0)
   const [showFace, setShowFace] = useState(true)
@@ -67,7 +73,8 @@ export default function PhotoViewer() {
     strip.current?.querySelector('[aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
   }, [index])
 
-  if (!ev || !allowed) return <Navigate to="/events" replace />
+  if (loadingEvent || loadingMatches || loadingLone) return <div className="fixed inset-0 z-50 bg-[#04070f]" />
+  if (error || !ev) return <Navigate to="/events" replace />
   if (!item) return <Navigate to={`/events/${eventId}/results`} replace />
 
   const { photo, score, box } = item
@@ -121,7 +128,7 @@ export default function PhotoViewer() {
               width: `min(100%, calc((100dvh - var(--chrome, 250px)) * ${photo.width / photo.height}))`,
             }}
           >
-            <img src={photo.src} alt={photo.alt} draggable={false} className="size-full rounded-lg object-cover sm:rounded-xl" />
+            <img src={photo.full || photo.src} alt={photo.alt} draggable={false} className="size-full rounded-lg object-cover sm:rounded-xl" />
             {showFace && box && <FaceBox box={box} delay={0.25} />}
           </motion.div>
         </AnimatePresence>
@@ -160,15 +167,8 @@ export default function PhotoViewer() {
             <span className="text-sm text-white/60">From your favorites</span>
           )}
           <p className="text-[12px] text-white/45 max-sm:hidden">
-            {new Date(photo.takenAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
-            {photo.credit && (
-              <>
-                {' · '}Photo by{' '}
-                <a href={`${photo.credit.url}?utm_source=facefetch_demo&utm_medium=referral`} target="_blank" rel="noreferrer" className="underline decoration-white/30 underline-offset-2 hover:text-white">
-                  {photo.credit.name}
-                </a>
-              </>
-            )}
+            {photo.name}
+            {photo.takenAt && ` · uploaded ${new Date(photo.takenAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`}
           </p>
           <span className="hidden items-center gap-2 text-[12px] text-white/40 lg:flex">
             <Kbd>←</Kbd>

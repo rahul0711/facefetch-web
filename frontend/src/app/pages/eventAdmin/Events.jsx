@@ -1,14 +1,14 @@
 import { CalendarRange } from 'lucide-react'
-import { useAuth } from '../../auth/AuthContext'
 import { EmptyState, PageHeader, Skeleton } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
+import { adminOverview } from '../../services/analyticsService'
 import { listAdminEvents } from '../../services/eventService'
 import { AssignedEventCard } from './Dashboard'
 
 export default function EAEvents() {
   useDocumentTitle('My events')
-  const { user } = useAuth()
-  const { data: events, loading } = useQuery(() => listAdminEvents(user.id), [user.id])
+  const { data: events, loading } = useQuery(() => listAdminEvents(), [])
+  const { data: overview } = useQuery(() => adminOverview(30), [])
   return (
     <div className="grid gap-6">
       <PageHeader title="My events" description="Events a Super Admin has assigned to you. Your access is set per event." />
@@ -17,7 +17,7 @@ export default function EAEvents() {
       ) : events.length ? (
         <div className="grid gap-4">
           {events.map((ev, i) => (
-            <AssignedEventCard key={ev.id} ev={ev} i={i} />
+            <AssignedEventCard key={ev.id} ev={ev} stats={overview?.perEvent[ev.id]} i={i} />
           ))}
         </div>
       ) : (

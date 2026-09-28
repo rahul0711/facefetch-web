@@ -1,12 +1,11 @@
-import { ArrowLeft, ArrowRight, CalendarDays, Camera, Clock, ImagePlus, Images, Lock, MapPin, ScanFace, ShieldCheck, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CalendarDays, Camera, ImagePlus, Images, Lock, MapPin, ScanFace, ShieldCheck, Sparkles } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Link, useParams } from 'react-router'
-import { useAuth } from '../../auth/AuthContext'
 import Photo from '../../components/Photo'
 import Button from '../../components/ui/Button'
 import { EmptyState, Skeleton, StatusBadge } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
-import { fmtDate, fmtTime, num } from '../../lib/utils'
+import { fmtDate, num } from '../../lib/utils'
 import { AccessError, getGuestEvent } from '../../services/eventService'
 import { lastSearch } from '../../services/searchService'
 
@@ -29,12 +28,12 @@ export function EventUnavailable({ error }) {
     <div className="container-page py-16">
       <EmptyState
         icon={denied ? Lock : ScanFace}
-        title={denied ? 'This event is private' : 'Event not found'}
+        title={denied ? 'This event isn’t available' : 'Event not found'}
         action={<Button to="/events">Back to your events</Button>}
         className="rounded-3xl bg-white ring-1 ring-navy-100"
       >
         {denied
-          ? 'Only invited guests can search this event. If you attended, ask the organizer to send you an invite.'
+          ? 'This event isn’t open for guests right now. If you attended, check back once the organizer publishes the photos.'
           : 'This event may have been removed, or the link is incorrect.'}
       </EmptyState>
     </div>
@@ -43,15 +42,14 @@ export function EventUnavailable({ error }) {
 
 export default function EventDetail() {
   const { eventId } = useParams()
-  const { user } = useAuth()
-  const { data: ev, error, loading } = useQuery(() => getGuestEvent(eventId, user.id), [eventId, user.id])
+  const { data: ev, error, loading } = useQuery(() => getGuestEvent(eventId), [eventId])
+  const { data: prev } = useQuery(() => lastSearch(eventId).catch(() => null), [eventId])
   useDocumentTitle(ev?.name)
 
   if (loading) return <EventHeroSkeleton />
-  if (error) return <EventUnavailable error={error} />
+  if (error || !ev) return <EventUnavailable error={error} />
 
-  const prev = lastSearch(ev.id, user.id)
-  const upcoming = ev.status === 'Upcoming'
+  const upcoming = !ev.photoCount
 
   return (
     <div className="pb-16">
@@ -77,20 +75,20 @@ export default function EventDetail() {
             >
               {ev.name}
             </motion.h1>
-            <p className="mt-2 text-lg text-white/80">{ev.subtitle}</p>
             <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[15px] text-white/85">
-              <span className="flex items-center gap-2">
-                <CalendarDays className="size-4 text-cyan-300" /> {fmtDate(ev.date, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
-              </span>
-              <span className="flex items-center gap-2">
-                <Clock className="size-4 text-cyan-300" /> {fmtTime(ev.start)} – {fmtTime(ev.end)}
-              </span>
-              <span className="flex items-center gap-2">
-                <MapPin className="size-4 text-cyan-300" /> {ev.venue}, {ev.city}
-              </span>
+              {ev.date && (
+                <span className="flex items-center gap-2">
+                  <CalendarDays className="size-4 text-cyan-300" /> {fmtDate(ev.date, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+                </span>
+              )}
+              {ev.location && (
+                <span className="flex items-center gap-2">
+                  <MapPin className="size-4 text-cyan-300" /> {ev.location}
+                </span>
+              )}
               {!upcoming && (
                 <span className="flex items-center gap-2">
-                  <Images className="size-4 text-cyan-300" /> {num(ev.stats.photos)} photos
+                  <Images className="size-4 text-cyan-300" /> {num(ev.photoCount)} photos
                 </span>
               )}
             </div>
@@ -101,12 +99,11 @@ export default function EventDetail() {
       <div className="container-page mt-12">
         {upcoming ? (
           <EmptyState icon={CalendarDays} title="Photos aren’t ready yet" className="rounded-3xl bg-white ring-1 ring-navy-100">
-            {ev.name} takes place on {fmtDate(ev.date, { day: 'numeric', month: 'long' })}. Come back after the event. Once the photographers upload,
-            you can find yourself in seconds.
+            The photographers haven’t uploaded {ev.name} photos yet. Come back soon. Once they’re uploaded, you can find yourself in seconds.
           </EmptyState>
         ) : (
           <>
-            {prev && (
+            {prev?.matchCount > 0 && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
                 <Link
                   to={`/events/${ev.id}/results`}
@@ -116,7 +113,7 @@ export default function EventDetail() {
                     <Sparkles className="size-5" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-semibold text-navy-950">You have {prev.hits.length} moments from this event</span>
+                    <span className="block font-semibold text-navy-950">You have {prev.matchCount} moments from this event</span>
                     <span className="block text-sm text-navy-500">From your last search. Search again anytime as more photos are added.</span>
                   </span>
                   <ArrowRight className="size-5 shrink-0 text-brand-600" />
@@ -126,7 +123,7 @@ export default function EventDetail() {
 
             <h2 className="text-2xl font-semibold text-navy-950 sm:text-3xl">Find your photos</h2>
             <p className="mt-2 text-navy-500">
-              We’ll search only the {num(ev.stats.photos)} photos from {ev.name}.
+              We’ll search only the {num(ev.photoCount)} photos from {ev.name}.
             </p>
 
             <div className="mt-6 grid gap-4 md:grid-cols-[1.35fr_1fr]">
@@ -180,26 +177,12 @@ export default function EventDetail() {
           </>
         )}
 
-        <section className="mt-14 grid gap-6 border-t border-navy-100 pt-10 md:grid-cols-[1.4fr_1fr]">
-          <div>
+        {ev.description && (
+          <section className="mt-14 border-t border-navy-100 pt-10">
             <h2 className="font-semibold text-navy-950">About this event</h2>
-            <p className="mt-2 leading-relaxed text-navy-600">{ev.description}</p>
-          </div>
-          <dl className="grid gap-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-navy-500">Organizer</dt>
-              <dd className="text-right font-medium text-navy-900">{ev.organizer}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-navy-500">Type</dt>
-              <dd className="font-medium text-navy-900">{ev.type}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-navy-500">Venue</dt>
-              <dd className="text-right font-medium text-navy-900">{ev.venue}</dd>
-            </div>
-          </dl>
-        </section>
+            <p className="mt-2 max-w-3xl leading-relaxed whitespace-pre-line text-navy-600">{ev.description}</p>
+          </section>
+        )}
       </div>
     </div>
   )
