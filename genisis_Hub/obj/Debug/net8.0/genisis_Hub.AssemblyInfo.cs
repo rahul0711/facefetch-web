@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("genisis_Hub")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+99aacd0752050a170eed1472148b6c4e2f985128")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f67999cff1352ba6250ae12f980fcdbf0bf04c67")]
 [assembly: System.Reflection.AssemblyProductAttribute("genisis_Hub")]
 [assembly: System.Reflection.AssemblyTitleAttribute("genisis_Hub")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

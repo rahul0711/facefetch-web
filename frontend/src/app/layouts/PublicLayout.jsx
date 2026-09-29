@@ -154,13 +154,7 @@ export function Footer() {
       <div className="border-t border-white/5">
         <div className="container-page flex flex-wrap items-center justify-between gap-3 py-6 text-[13px] text-navy-400">
           <span>© 2026 Genesis Hub, Inc.</span>
-          <span>
-            Photography on this page by{' '}
-            <a href="https://unsplash.com/?utm_source=genesis_hub&utm_medium=referral" className="underline decoration-navy-600 underline-offset-2 hover:text-white" target="_blank" rel="noreferrer">
-              Unsplash
-            </a>{' '}
-            contributors.
-          </span>
+          <span>All people and photos shown on this page are AI-generated.</span>
         </div>
       </div>
     </footer>
