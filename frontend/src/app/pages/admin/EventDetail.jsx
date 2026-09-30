@@ -1,13 +1,14 @@
-import { Archive, ArrowLeft, CalendarDays, Copy, Download, Hash, Images, MapPin, Pencil, ScanFace, ScanSearch, ShieldCheck, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Copy, Download, Hash, Images, MapPin, Pencil, ScanFace, ScanSearch, ShieldCheck, UserPlus, Users } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { AssignAdminsDrawer } from '../../components/AssignAdmins'
 import { AreaChart, Panel, StatusStack } from '../../components/charts'
 import { EventCover, StatStrip } from '../../components/console'
+import EventDangerZone from '../../components/EventDangerZone'
 import Photo from '../../components/Photo'
 import VisitorsTable from '../../components/VisitorsTable'
 import Button from '../../components/ui/Button'
-import { Modal, useToast } from '../../components/ui/overlay'
+import { useToast } from '../../components/ui/overlay'
 import { Avatar, Badge, EmptyState, Skeleton, StatusBadge } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { compact, copyText, fmtDate, num } from '../../lib/utils'
@@ -15,7 +16,7 @@ import { PERMISSIONS } from '../../services/adapters'
 import { eventAnalytics } from '../../services/analyticsService'
 import { listPhotos } from '../../services/photoService'
 import { shareLink } from '../../services/searchService'
-import { archiveEvent, getEvent, listEventAssignments } from '../../services/eventService'
+import { getEvent, listEventAssignments } from '../../services/eventService'
 
 export function EventDetailSkeleton() {
   return (
@@ -77,7 +78,7 @@ export default function AdminEventDetail() {
   const { data: photos } = useQuery(() => listPhotos(eventId, { pageSize: 8 }).then((r) => r.items), [eventId])
   const { data: assignments } = useQuery(() => listEventAssignments(eventId), [eventId])
   const [assigning, setAssigning] = useState(false)
-  const [archiving, setArchiving] = useState(false)
+  const navigate = useNavigate()
   useDocumentTitle(ev?.name)
 
   if (loading) return <EventDetailSkeleton />
@@ -209,48 +210,9 @@ export default function AdminEventDetail() {
         <VisitorsTable eventId={ev.eventId} />
       </Panel>
 
-      {ev.status !== 'Archived' && (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-navy-100 bg-white p-5">
-          <div>
-            <p className="font-medium text-navy-900">Archive this event</p>
-            <p className="text-[13px] text-navy-500">Hides it from guests. Photos and analytics are kept.</p>
-          </div>
-          <Button variant="destructive-ghost" onClick={() => setArchiving(true)} className="ring-1 ring-red-200">
-            <Archive /> Archive event
-          </Button>
-        </div>
-      )}
+      <EventDangerZone ev={ev} canManage canDelete onDeleted={() => navigate('/admin/events', { replace: true })} />
 
       <AssignAdminsDrawer event={ev} open={assigning} onClose={() => setAssigning(false)} />
-      <Modal
-        open={archiving}
-        onClose={() => setArchiving(false)}
-        title={`Archive ${ev.name}?`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setArchiving(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                try {
-                  await archiveEvent(ev.eventId)
-                  toast(`${ev.name} archived`)
-                } catch (e) {
-                  toast(e.message, { tone: 'error' })
-                }
-                setArchiving(false)
-              }}
-            >
-              Archive
-            </Button>
-          </>
-        }
-      >
-        <p className="text-navy-600">Guests will no longer be able to open or search this event.</p>
-      </Modal>
     </div>
   )
 }

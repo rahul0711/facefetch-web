@@ -74,7 +74,16 @@ export async function setEventStatus(eventId, status) {
   emitChange()
 }
 
-export const archiveEvent = (eventId) => setEventStatus(eventId, 'Archived')
+// "Deactivated" = Archived: hidden from guests, everything kept.
+export const deactivateEvent = (eventId) => setEventStatus(eventId, 'Archived')
+export const reactivateEvent = (eventId) => setEventStatus(eventId, 'Active')
+
+/** Deletes the event and all its photos for good. -> { deletedPhotos } */
+export async function deleteEvent(eventId) {
+  const r = await api(`/api/events/${eventId}`, { method: 'DELETE' })
+  emitChange()
+  return r
+}
 
 export async function uploadCover(eventId, file) {
   const form = new FormData()

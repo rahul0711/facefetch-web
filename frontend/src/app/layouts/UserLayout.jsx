@@ -6,6 +6,7 @@ import Logo from '../components/ui/Logo'
 import { Menu } from '../components/ui/overlay'
 import { Avatar } from '../components/ui/primitives'
 import { cn } from '../lib/utils'
+import { ROLE_HOME } from '../services/authService'
 
 const NAV = [
   { to: '/events', label: 'Events', icon: CalendarHeart },
@@ -16,17 +17,19 @@ const NAV = [
 
 // Visitors without an account only get the events list (no profile, favorites
 // or account menu); the event pages themselves work the same for everyone.
+// A logged-in admin browsing the guest pages sees the same visitor header,
+// with a way back to their console instead of "Admin login".
 export default function UserLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  if (!user) {
+  if (!user || user.role !== 'end_user') {
     return (
       <div className="min-h-dvh bg-canvas">
         <header className="sticky top-0 z-40 border-b border-navy-100/80 bg-white/80 backdrop-blur-xl">
           <div className="container-page flex h-16 items-center gap-8">
             <Logo />
-            <Button to="/login" variant="ghost" size="sm" className="ml-auto">
-              Admin login
+            <Button to={user ? ROLE_HOME[user.role] : '/login'} variant="ghost" size="sm" className="ml-auto">
+              {user ? 'Open admin console' : 'Admin login'}
             </Button>
           </div>
         </header>

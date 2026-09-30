@@ -104,3 +104,9 @@ D:/genisis_Hub/genisis_Hub/obj/Debug/net8.0/staticwebassets.upToDateCheck.txt
 /home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/obj/Debug/net8.0/genisis_Hub.pdb
 /home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/obj/Debug/net8.0/genisis_Hub.genruntimeconfig.cache
 /home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/obj/Debug/net8.0/ref/genisis_Hub.dll
+/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/bin/Debug/net8.0/publish/web.config
+/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/bin/Debug/net8.0/publish/appsettings.Development.json
+/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/bin/Debug/net8.0/publish/appsettings.json
+/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/bin/Debug/net8.0/publish/genisis_Hub.deps.json
+/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/bin/Debug/net8.0/publish/genisis_Hub.runtimeconfig.json
+/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/bin/Debug/net8.0/publish/genisis_Hub.staticwebassets.endpoints.json

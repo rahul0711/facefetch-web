@@ -1,5 +1,5 @@
 // Building blocks shared by the Super Admin and Event Admin consoles.
-import { Archive, CalendarDays, CalendarPlus, Ellipsis, Eye, Images, MapPin, Pencil, ScanSearch, Search, UserPlus } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Ellipsis, Eye, Images, MapPin, Pencil, Power, PowerOff, ScanSearch, Search, Trash2, UserPlus } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Link } from 'react-router'
 import { compact, fmtDate, timeAgo } from '../lib/utils'
@@ -17,7 +17,8 @@ export function EventCover({ ev, className }) {
   )
 }
 
-export function AdminEventCard({ ev, to, onAssign, onArchive, onEdit, i = 0, showAdmins = true }) {
+// onAction('deactivate' | 'reactivate' | 'delete') opens the matching confirm dialog.
+export function AdminEventCard({ ev, to, onAssign, onAction, onEdit, i = 0, showAdmins = true }) {
   return (
     <motion.article
       initial={{ opacity: 0, y: 12 }}
@@ -36,7 +37,7 @@ export function AdminEventCard({ ev, to, onAssign, onArchive, onEdit, i = 0, sho
           <Link to={to} className="min-w-0 flex-1">
             <h3 className="truncate font-semibold text-navy-950 hover:text-brand-700">{ev.name}</h3>
           </Link>
-          {(onEdit || onAssign || onArchive) && (
+          {(onEdit || onAssign || onAction) && (
             <Menu
               trigger={({ toggle, open }) => (
                 <button onClick={toggle} aria-expanded={open} aria-label={`Actions for ${ev.name}`} className="-mt-1 -mr-1 grid size-8 place-items-center rounded-lg text-navy-400 hover:bg-navy-50 hover:text-navy-800">
@@ -47,8 +48,12 @@ export function AdminEventCard({ ev, to, onAssign, onArchive, onEdit, i = 0, sho
                 { label: 'View', icon: Eye, onClick: () => onEdit?.('view') },
                 onEdit && { label: 'Edit details', icon: Pencil, onClick: () => onEdit('edit') },
                 onAssign && { label: 'Assign admin', icon: UserPlus, onClick: onAssign },
-                onArchive && ev.status !== 'Archived' && '-',
-                onArchive && ev.status !== 'Archived' && { label: 'Archive', icon: Archive, danger: true, onClick: onArchive },
+                onAction && '-',
+                onAction &&
+                  (ev.status === 'Archived'
+                    ? { label: 'Reactivate', icon: Power, onClick: () => onAction('reactivate') }
+                    : { label: 'Deactivate', icon: PowerOff, onClick: () => onAction('deactivate') }),
+                onAction && { label: 'Delete event', icon: Trash2, danger: true, onClick: () => onAction('delete') },
               ]}
             />
           )}

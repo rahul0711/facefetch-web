@@ -2,19 +2,18 @@ import { ArrowDown, ArrowRight, Camera, EyeOff, Lock, Plus, ScanFace, ShieldChec
 import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { useAuth } from '../../auth/AuthContext'
 import { GridBackdrop, Marquee, Reveal } from '../../components/effects'
 import CompareSlider from '../../components/landing/CompareSlider'
+import DemoFace from '../../components/landing/DemoFace'
 import FeatureBento from '../../components/landing/FeatureBento'
 import GuestFlow from '../../components/landing/GuestFlow'
 import MatchWall from '../../components/landing/MatchWall'
 import OrganizerSection from '../../components/landing/OrganizerSection'
 import ShineButton from '../../components/landing/ShineButton'
 import Photo from '../../components/Photo'
-import { byIds, largestFace, selfie, thumb } from '../../data/gallery'
+import { byIds, largestFace, thumb } from '../../data/gallery'
 import { useDocumentTitle } from '../../lib/hooks'
 import { cn } from '../../lib/utils'
-import { ROLE_HOME } from '../../services/authService'
 
 const EASE = [0.22, 1, 0.36, 1]
 
@@ -46,7 +45,7 @@ function FoundToast() {
       className="absolute right-8 bottom-12 z-10 hidden items-center gap-4 rounded-3xl bg-white/10 py-3 pr-6 pl-3 ring-1 ring-white/20 backdrop-blur-xl lg:flex xl:right-16"
     >
       <span className="relative size-14 overflow-hidden rounded-2xl ring-2 ring-cyan-300">
-        <img src={selfie.src} alt="" className="size-full object-cover object-[50%_22%]" />
+        <DemoFace crop="head" className="size-full" />
       </span>
       <span>
         <span className="block text-[13px] text-navy-200">Priya, we found you in</span>
@@ -574,8 +573,9 @@ function FinalCta({ primaryTo }) {
 
 export default function Landing() {
   useDocumentTitle()
-  const { user } = useAuth()
-  const primaryTo = user ? ROLE_HOME[user.role] : '/events'
+  // "Find my photos" always leads to the events, even for a logged-in admin
+  // (the nav bar has its own "Open Genesis Hub" link to the consoles).
+  const primaryTo = '/events'
   return (
     <>
       <Hero primaryTo={primaryTo} />

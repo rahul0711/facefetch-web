@@ -1,6 +1,9 @@
 import { ImagePlus, Lock, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
+import { useAuth } from '../../auth/AuthContext'
 import { EventCover } from '../../components/console'
+import EventDangerZone from '../../components/EventDangerZone'
 import Button from '../../components/ui/Button'
 import { useToast } from '../../components/ui/overlay'
 import { Field, Input, Select, Textarea } from '../../components/ui/primitives'
@@ -20,6 +23,8 @@ export default function EAEventSettings() {
   const { ev, perms, loading, error, reload } = useAdminEvent()
   useDocumentTitle(ev ? `Settings · ${ev.name}` : 'Settings')
   const toast = useToast()
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const fileRef = useRef(null)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -133,6 +138,14 @@ export default function EAEventSettings() {
           </Button>
         </div>
       )}
+      {/* only the event admin who created an event may delete it (a Super Admin can delete any) */}
+      <EventDangerZone
+        ev={ev}
+        canManage={can}
+        canDelete={can && ev.createdBy === user.id}
+        onChanged={() => (setForm(null), reload())}
+        onDeleted={() => navigate('/event-admin/events', { replace: true })}
+      />
     </div>
   )
 }

@@ -1,9 +1,10 @@
 import { ArrowRight, Check, Download, Search } from 'lucide-react'
 import { AnimatePresence, motion, useInView } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
-import { byIds, largestFace, selfie, thumb } from '../../data/gallery'
+import { byIds, largestFace, thumb } from '../../data/gallery'
 import { cn } from '../../lib/utils'
 import Photo from '../Photo'
+import DemoFace from './DemoFace'
 
 // "How it works" for guests: the steps scroll on the left while a phone on
 // the right (sticky) shows the matching screen. On small screens each step
@@ -75,7 +76,7 @@ function EventsScreen() {
 function SelfieScreen() {
   return (
     <div className="relative h-full overflow-hidden bg-navy-950">
-      <img src={selfie.src} alt="" className="absolute inset-0 size-full object-cover" />
+      <DemoFace className="absolute inset-0 size-full" />
       <div className="absolute inset-x-0 top-0">
         <StatusBar dark />
       </div>

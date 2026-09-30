@@ -175,11 +175,49 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// Production (port 9006 behind nginx): the backend also serves the built React
+// app, so the whole site is one origin and nginx proxies a single port.
+// Enabled only when Frontend:DistPath points at frontend/dist. Registered
+// before routing: static files are skipped once an endpoint has matched.
+var distPath = app.Configuration["Frontend:DistPath"];
+var distRoot = !string.IsNullOrWhiteSpace(distPath) && Directory.Exists(distPath) ? Path.GetFullPath(distPath) : null;
+if (distRoot != null)
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(distRoot),
+        OnPrepareResponse = ctx =>
+        {
+            // Vite fingerprints everything under /assets, so those never change.
+            if (ctx.Context.Request.Path.StartsWithSegments("/assets"))
+                ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        },
+    });
+}
+
 app.UseCors("AllowFrontend");
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Production (port 9006 behind nginx): client-side routes (/events, /admin/...)
+// get index.html; unknown API paths stay 404. See Frontend:DistPath above.
+if (distRoot != null)
+{
+    app.MapFallback(async context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        context.Response.Headers.CacheControl = "no-cache";
+        context.Response.ContentType = "text/html; charset=utf-8";
+        await context.Response.SendFileAsync(Path.Combine(distRoot, "index.html"));
+    });
+}
 
 app.Run();

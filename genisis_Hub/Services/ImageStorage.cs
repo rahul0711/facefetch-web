@@ -81,6 +81,17 @@ namespace genisis_Hub.Services
 
         public bool Exists(string? storedPath) => !string.IsNullOrEmpty(storedPath) && File.Exists(Resolve(storedPath));
 
+        /// <summary>Removes a storage sub-folder (e.g. photos/12) once it's empty.</summary>
+        public void DeleteFolderIfEmpty(string relativeFolder)
+        {
+            try
+            {
+                var abs = Resolve(relativeFolder);
+                if (Directory.Exists(abs) && !Directory.EnumerateFileSystemEntries(abs).Any()) Directory.Delete(abs);
+            }
+            catch (IOException) { /* best effort */ }
+        }
+
         public void Delete(string? storedPath)
         {
             if (string.IsNullOrEmpty(storedPath)) return;

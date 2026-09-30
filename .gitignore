@@ -45,6 +45,12 @@ uploads/
 data/
 output/
 
+# Genesis Hub: event photos, thumbnails and covers saved by the app
+# (uploads, folder uploads, Google Drive imports) -- never commit them
+genisis_Hub/storage/
+# published backend build (dotnet publish -o publish)
+genisis_Hub/publish/
+
 # Certificates / private keys
 *.pem
 *.key

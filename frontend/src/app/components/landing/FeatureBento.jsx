@@ -1,9 +1,10 @@
 import { Camera, Check, FileArchive, ImagePlus, Lock, ScanFace, Smartphone } from 'lucide-react'
 import { motion, useInView } from 'motion/react'
 import { useRef } from 'react'
-import { byIds, selfie, thumb } from '../../data/gallery'
+import { byIds, thumb } from '../../data/gallery'
 import { cn } from '../../lib/utils'
 import Photo from '../Photo'
+import DemoFace from './DemoFace'
 
 // Aceternity-style bento: every tile shows its feature working, and a soft
 // spotlight follows the cursor across it.
@@ -47,7 +48,7 @@ function Tile({ className, title, text, children, dark, visualClassName }) {
 // A real concert photo: every face our detector found is boxed in, one by
 // one, then one of them is picked out as "you".
 const CROWD_ID = 'nPz8akkUmDI'
-const YOU = 1
+const YOU = 2 // the large face near the middle of the (AI-generated) crowd
 
 function CrowdScan() {
   const ref = useRef(null)
@@ -172,7 +173,7 @@ function Private() {
           viewport={{ once: true }}
           transition={{ duration: 2.6, times: [0, 0.6, 1], delay: 0.4 }}
         >
-          <img src={selfie.src} alt="" className="size-full object-cover object-[50%_22%]" loading="lazy" />
+          <DemoFace crop="head" className="size-full" />
         </motion.div>
         <div className="flex h-12 flex-1 items-end gap-[3px]">
           {SIGNATURE.map((h, i) => (

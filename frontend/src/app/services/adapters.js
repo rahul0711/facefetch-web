@@ -53,6 +53,7 @@ export function toEvent(e) {
     cover: e.coverUrl ? withToken(e.coverUrl) : null,
     status: e.status,
     photoCount: e.photoCount ?? 0,
+    createdBy: e.createdBy,
     createdByName: e.createdByName,
     createdAt: e.createdAt,
     perms: toPerms(e.myPermissions),

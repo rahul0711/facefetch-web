@@ -11,6 +11,7 @@ namespace genisis_Hub.Services
         Task<List<Event>> GetEventsByStatusesAsync(IEnumerable<string> statuses);
         Task<bool> UpdateStatusAsync(ulong eventId, string status);
         Task<bool> SetCoverAsync(ulong eventId, string? coverPath);
+        Task<List<string>?> DeleteEventAsync(ulong eventId);
         Task<List<(ulong EventId, string EventName, string Status, bool CanView, bool CanUpload, bool CanDelete, bool CanManage, ulong UserId)>> GetAssignmentsForUsersAsync(IEnumerable<ulong> userIds);
         Task<List<Event>> GetEventsByAdminAsync(ulong userId);
         Task<Event?> GetEventByCodeAsync(string eventCode);
@@ -60,6 +61,29 @@ namespace genisis_Hub.Services
             using var conn = _db.CreateConnection();
             return await conn.ExecuteAsync("UPDATE events SET status=@Status WHERE event_id=@EventId",
                 new { Status = status, EventId = eventId }) > 0;
+        }
+
+        /// <summary>
+        /// Deletes the event row; the database cascades to its admins, photos,
+        /// faces, searches, matches and downloads (activity logs keep a NULL
+        /// event). Returns the stored files (photos, thumbnails, cover) for the
+        /// caller to remove from disk, or null if there was no such event.
+        /// </summary>
+        public async Task<List<string>?> DeleteEventAsync(ulong eventId)
+        {
+            using var conn = _db.CreateConnection();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+            var files = (await conn.QueryAsync<(string FilePath, string? ThumbnailPath)>(
+                "SELECT file_path, thumbnail_path FROM photos WHERE event_id=@EventId", new { EventId = eventId }, tx))
+                .SelectMany(p => new[] { p.FilePath, p.ThumbnailPath })
+                .ToList();
+            files.Add(await conn.QueryFirstOrDefaultAsync<string?>(
+                "SELECT cover_image FROM events WHERE event_id=@EventId", new { EventId = eventId }, tx));
+            var rows = await conn.ExecuteAsync("DELETE FROM events WHERE event_id=@EventId", new { EventId = eventId }, tx);
+            if (rows == 0) return null;
+            tx.Commit();
+            return files.Where(f => !string.IsNullOrEmpty(f)).Select(f => f!).ToList();
         }
 
         public async Task<bool> SetCoverAsync(ulong eventId, string? coverPath)

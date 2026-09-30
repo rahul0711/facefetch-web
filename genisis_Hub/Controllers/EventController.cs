@@ -128,6 +128,32 @@ namespace genisis_Hub.Controllers
             return Ok(ApiResponse.Ok($"Event is now {request.Status}"));
         }
 
+        // DELETE api/events/{id}  -- removes the event, its photos (database + files), faces,
+        // searches and downloads. Can't be undone. A SuperAdmin can delete any event; an
+        // event admin only one they created themselves (and still manage).
+        [HttpDelete("{id:long}")]
+        [Authorize(Roles = "EventAdmin,SuperAdmin")]
+        public async Task<IActionResult> Delete(ulong id)
+        {
+            var ev = await _events.GetEventByIdAsync(id);
+            if (ev == null) return NotFound(ApiResponse<object>.Fail("Event not found"));
+            var userId = JwtHelper.GetUserId(User);
+            if (!User.IsSuperAdmin() && !(ev.CreatedBy == userId && await _access.CanAsync(id, User, p => p.CanManage)))
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<object>.Fail("Only a Super Admin, or the event admin who created this event, can delete it."));
+
+            var files = await _events.DeleteEventAsync(id);
+            if (files == null) return NotFound(ApiResponse<object>.Fail("Event not found"));
+            foreach (var f in files) _images.Delete(f);
+            _images.DeleteFolderIfEmpty($"photos/{id}");
+            _images.DeleteFolderIfEmpty($"thumbnails/{id}");
+
+            var photos = files.Count(f => f.StartsWith("photos/"));
+            // the event row is gone, so the log entry can't reference it
+            await _log.LogAsync(userId, null, "EVENT_DELETED", $"{ev.EventName} ({ev.EventCode}, #{id}) with {photos} photo(s)");
+            return Ok(ApiResponse<object>.Ok(new { deletedPhotos = photos }, "Event deleted"));
+        }
+
         // POST api/events/{id}/cover  (multipart "file") -- stored compressed
         [HttpPost("{id:long}/cover")]
         [Authorize(Roles = "EventAdmin,SuperAdmin")]

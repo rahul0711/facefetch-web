@@ -3,23 +3,21 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { AssignAdminsDrawer } from '../../components/AssignAdmins'
 import { AdminEventCard, CardGridSkeleton } from '../../components/console'
+import { EventActionDialog } from '../../components/EventDangerZone'
 import Button from '../../components/ui/Button'
-import { Modal, useToast } from '../../components/ui/overlay'
 import { EmptyState, Input, PageHeader, Segmented } from '../../components/ui/primitives'
 import { useDocumentTitle, useQuery } from '../../lib/hooks'
 import { EVENT_STATUSES } from '../../services/adapters'
-import { archiveEvent, listEvents } from '../../services/eventService'
+import { listEvents } from '../../services/eventService'
 
 export default function AdminEvents() {
   useDocumentTitle('Events')
   const navigate = useNavigate()
-  const toast = useToast()
   const { data: events, loading } = useQuery(() => listEvents(), [])
   const [status, setStatus] = useState('All')
   const [q, setQ] = useState('')
   const [assigning, setAssigning] = useState(null)
-  const [archiving, setArchiving] = useState(null)
-  const [busy, setBusy] = useState(false)
+  const [acting, setActing] = useState(null) // { ev, action }
 
   const counts = useMemo(() => {
     const c = { All: events?.length || 0 }
@@ -63,7 +61,7 @@ export default function AdminEvents() {
               to={`/admin/events/${ev.id}`}
               onEdit={(mode) => navigate(mode === 'edit' ? `/admin/events/${ev.id}/edit` : `/admin/events/${ev.id}`)}
               onAssign={() => setAssigning(ev)}
-              onArchive={() => setArchiving(ev)}
+              onAction={(action) => setActing({ ev, action })}
             />
           ))}
         </div>
@@ -89,39 +87,7 @@ export default function AdminEvents() {
       )}
 
       <AssignAdminsDrawer event={assigning} open={!!assigning} onClose={() => setAssigning(null)} />
-      <Modal
-        open={!!archiving}
-        onClose={() => setArchiving(null)}
-        title={`Archive ${archiving?.name}?`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setArchiving(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              loading={busy}
-              onClick={async () => {
-                setBusy(true)
-                try {
-                  await archiveEvent(archiving.eventId)
-                  toast(`${archiving.name} archived`)
-                  setArchiving(null)
-                } catch (e) {
-                  toast(e.message, { tone: 'error' })
-                } finally {
-                  setBusy(false)
-                }
-              }}
-            >
-              Archive event
-            </Button>
-          </>
-        }
-      >
-        <p className="text-navy-600">Guests will no longer see this event or be able to search it. Photos and analytics are kept, and you can restore it later by changing its status.</p>
-      </Modal>
+      <EventActionDialog ev={acting?.ev} action={acting?.action} onClose={() => setActing(null)} onDone={() => setActing(null)} />
     </div>
   )
 }
