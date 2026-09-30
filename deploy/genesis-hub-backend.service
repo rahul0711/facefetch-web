@@ -1,0 +1,25 @@
+[Unit]
+Description=Genesis Hub C# backend (API + website for port 9006)
+After=network.target genesis-hub-face.service
+Wants=genesis-hub-face.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=aiserver
+Group=aiserver
+WorkingDirectory=/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/publish
+Environment=HOME=/home/aiserver
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5044
+Environment=ASPNETCORE_ENVIRONMENT=Production
+# photos live in the project's storage folder, not next to the published build
+Environment=FileStorage__Root=/home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/storage
+# serve the built React app from the same origin
+Environment=Frontend__DistPath=/home/aiserver/Desktop/Face_Fetching_website/frontend/dist
+ExecStart=/usr/bin/dotnet /home/aiserver/Desktop/Face_Fetching_website/genisis_Hub/publish/genisis_Hub.dll
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
